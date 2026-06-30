@@ -42,3 +42,27 @@ func BenchmarkBuildSystemPromptMinimal(b *testing.B) {
 		BuildSystemPromptMinimal(profile, toolNames)
 	}
 }
+
+func BenchmarkBuildSystemPrompt9Tools(b *testing.B) {
+	profile := &project.Profile{
+		Language:    "C",
+		Framework:   "42",
+		BuildSystem: "make",
+		PackageName: "ft_printf",
+	}
+	toolDefs := []llm.ToolDef{
+		{Name: "read", Description: "Read a file"},
+		{Name: "write", Description: "Write a file"},
+		{Name: "edit", Description: "Edit a file"},
+		{Name: "grep", Description: "Search with regex"},
+		{Name: "glob", Description: "Find files"},
+		{Name: "bash", Description: "Run commands"},
+		{Name: "ask", Description: "Ask the user"},
+		{Name: "task", Description: "Launch sub-agent"},
+		{Name: "search", Description: "Search the web"},
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		BuildSystemPrompt(profile, toolDefs)
+	}
+}

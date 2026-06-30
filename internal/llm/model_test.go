@@ -63,3 +63,17 @@ func TestMatchProfileTwoB(t *testing.T) {
 		t.Error("expected minimal mode for 2b")
 	}
 }
+
+func TestMatchProfileTwoPointZeroB(t *testing.T) {
+	p := MatchProfile("qwen3.5:2.0b")
+	if p.MaxContext != 20000 {
+		t.Errorf("expected 20000 (prefix fallback) for 2.0b, got %d", p.MaxContext)
+	}
+}
+
+func TestMatchProfileBareName(t *testing.T) {
+	p := MatchProfile("qwen3.5")
+	if p.MaxContext != 20000 {
+		t.Errorf("expected 20000 for bare 'qwen3.5', got %d", p.MaxContext)
+	}
+}

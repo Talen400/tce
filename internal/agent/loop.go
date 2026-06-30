@@ -36,12 +36,6 @@ var codeRequestPatterns = []string{
 	"ft_", "crie um", "cria um",
 }
 
-var hallucinationPatterns = []string{
-	"fmt.FprintfWith", "io.WriteString(%s",
-	"io.WriteString(os.Stdout,", "fmt.Fprint(",
-	"fmt.Fprintln(os.Stderr,", "f.Print(",
-}
-
 var minimalSafeTools = map[string]bool{
 	"read": true, "grep": true, "glob": true, "bash": true, "search": true,
 }
@@ -169,8 +163,8 @@ func (a *Agent) Run(ctx context.Context, userPrompt string, onToken func(string)
 				return "", fmt.Errorf("code requests require tool use — implement using write/edit tools, not direct answers")
 			}
 
-			if hasHallucination(streamedContent) {
-				return "", fmt.Errorf("response contains invalid function signatures — use tools to discover correct APIs")
+			if hasHallucinatedCode(streamedContent) {
+				return "", fmt.Errorf("response contains code blocks — use write/edit tools instead of direct code output")
 			}
 
 			a.messages = append(a.messages, llm.Message{Role: "assistant", Content: streamedContent})
@@ -365,13 +359,14 @@ func isCodeRequest(input string) bool {
 	return false
 }
 
-func hasHallucination(text string) bool {
-	for _, p := range hallucinationPatterns {
-		if strings.Contains(text, p) {
-			return true
-		}
+func hasHallucinatedCode(text string) bool {
+	if text == "" {
+		return false
 	}
-	return false
+	hasCodeBlock := strings.Contains(text, "```c") || strings.Contains(text, "```go") ||
+		strings.Contains(text, "```C") || strings.Contains(text, "```")
+	hasToolMarker := strings.Contains(text, "❯ write(") || strings.Contains(text, "❯ edit(")
+	return hasCodeBlock && !hasToolMarker
 }
 
 func (a *Agent) autoBootstrap(ctx context.Context) {

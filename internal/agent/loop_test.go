@@ -279,27 +279,55 @@ func TestIsCodeRequestFtPrefix(t *testing.T) {
 	}
 }
 
-func TestHasHallucinationGoNonsense(t *testing.T) {
-	if !hasHallucination("Use fmt.FprintfWith") {
-		t.Error("expected true for fmt.FprintfWith")
+func TestHasHallucinatedCodeBlocks(t *testing.T) {
+	if !hasHallucinatedCode("Here's the code:\n```c\nint main() {}\n```") {
+		t.Error("expected true for code block without write tool")
 	}
-	if !hasHallucination("io.WriteString(%s") {
-		t.Error("expected true for io.WriteString with format")
-	}
-	if !hasHallucination("f.Print(\"Error: %v\\n\", err)") {
-		t.Error("expected true for f.Print(")
+	if !hasHallucinatedCode("```go\nfunc main() {}\n```") {
+		t.Error("expected true for go code block")
 	}
 }
 
-func TestHasHallucinationCleanResponse(t *testing.T) {
-	if hasHallucination("I read the file and found the function.") {
-		t.Error("expected false for clean response")
+func TestHasHallucinatedCodeWithTool(t *testing.T) {
+	if hasHallucinatedCode("❯ write(main.c)\n── Written 27 lines ──\n```c\nint main() {}\n```") {
+		t.Error("expected false when write tool was used")
 	}
-	if hasHallucination("") {
+}
+
+func TestHasHallucinatedCodeClean(t *testing.T) {
+	if hasHallucinatedCode("Hello! How can I help?") {
+		t.Error("expected false for plain text")
+	}
+	if hasHallucinatedCode("") {
 		t.Error("expected false for empty string")
 	}
-	if hasHallucination("Use fmt.Sprintf to format strings") {
-		t.Error("expected false for valid Go function")
+}
+
+func BenchmarkAgentSearchWriteFlow(b *testing.B) {
+	tmpDir := b.TempDir()
+
+	responses := make([]mockResponse, 4)
+	responses[0] = mockResponse{toolCalls: []llm.ToolCall{{ID: "s1", Name: "search", Arguments: `{"query":"printf C"}`}}}
+	responses[1] = mockResponse{toolCalls: []llm.ToolCall{{ID: "g1", Name: "glob", Arguments: `{"pattern":"*.c"}`}}}
+	responses[2] = mockResponse{toolCalls: []llm.ToolCall{{ID: "r1", Name: "read", Arguments: `{"file_path":"main.c"}`}}}
+	responses[3] = mockResponse{content: "Done"}
+
+	agent := New(Config{
+		Type:     AgentBuild,
+		LLM:      &mockLLM{responses: responses},
+		Tools:    testRegistry(),
+		Project:  testProfile(tmpDir),
+		MaxTurns: 5,
+	})
+
+	agent.Reset()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		agent.Reset()
+		_, err := agent.Run(context.Background(), "implement ft_printf", nil, nil, nil)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 

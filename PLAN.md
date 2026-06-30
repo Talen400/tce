@@ -1,6 +1,6 @@
 # TCE — Plano de Melhorias
 
-> Gerado em: 2026-06-30
+> Gerado em: 2026-06-30 (atualizado)
 > Projeto: `github.com/talen/tce`
 
 ---
@@ -77,10 +77,10 @@
 
 **Status geral:** Testes existentes passam (exceto `detect_test.go` que usa paths `/tmp/testprojects/*`).
 
-### [ ] Testes para novos módulos
-
-- **`internal/tools/parse.go`**: `firstOf`, `tryFixJSON`, `fuzzyMatch`
-- **`internal/llm/model.go`**: `MatchProfile`, match exato, prefixo, fallback
+### [x] Testes para novos módulos
+- **`internal/tools/parse.go`**: `firstOf`, `tryFixJSON`, `fuzzyMatch` ✅
+- **`internal/llm/model.go`**: `MatchProfile`, match exato, prefixo, fallback ✅
+- **`internal/tools/search.go`**: `parseLiteHTML`, `stripTags`, `decodeEntities`, `decodeURLParam` ✅
 
 ---
 
@@ -240,11 +240,13 @@ Se uma mesma tool falha 3x seguidas, interrompe com erro específico.
 
 ### Testes
 
-| Item | Descrição | Esforço |
-|------|-----------|---------|
-| `parse_test.go` | `firstOf`, `tryFixJSON`, `fuzzyMatch` | 30min |
-| `model_test.go` | `MatchProfile` com match exato/prefixo/fallback | 15min |
-| Fix `detect_test.go` | Substituir paths fixos por `t.TempDir()` | 15min |
+| Item | Descrição | Esforço | Status |
+|------|-----------|---------|--------|
+| `parse_test.go` | `firstOf`, `tryFixJSON`, `fuzzyMatch` | 30min | ✅ |
+| `model_test.go` | `MatchProfile` com match exato/prefixo/fallback | 15min | ✅ |
+| `search_test.go` | `parseLiteHTML`, `stripTags`, `decodeEntities` | 20min | ✅ |
+| Fix `detect_test.go` | Substituir paths fixos por `t.TempDir()` | 15min | ✅ |
+| Benchmarks | 10 benchmarks (compactor, parse, read/grep, agent, prompt, search) | 30min | ✅ |
 
 ### Técnico
 
