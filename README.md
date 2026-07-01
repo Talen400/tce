@@ -6,6 +6,7 @@ Assistente de codificação via terminal que se conecta a LLMs (Ollama/OpenAI-co
 
 - Go 1.24+
 - Ollama (ou qualquer API OpenAI-compatível) rodando em `http://localhost:11434`
+- Python 3.10+ (opcional, para o backend Python local)
 
 ## Instalação
 
@@ -45,6 +46,9 @@ go build -o tce .
 
 # API customizada
 ./tce --base-url http://localhost:11434/v1 --api-key ollama
+
+# Backend Python local (auto-download + servidor)
+./tce --serve
 ```
 
 ### Variáveis de Ambiente
@@ -54,6 +58,28 @@ go build -o tce .
 | `TCE_API_URL` | Base URL da API |
 | `TCE_API_KEY` | API Key |
 | `TCE_MODEL` | Nome do modelo |
+
+## Backend Python Local
+
+Para ambientes sem Ollama (ex: clusters 42), o TCE inclui um servidor Python que roda modelos GGUF localmente:
+
+```bash
+# Instalar dependência
+pip install llama-cpp-python requests
+
+# Iniciar servidor manual
+python serve.py
+
+# Auto-spawn (TCE inicia o servidor sozinho)
+./tce --serve
+
+# Conectar a um servidor já rodando
+./tce --base-url http://127.0.0.1:8001/v1 --api-key not-needed
+```
+
+Na primeira execução, o modelo é baixado automaticamente da HuggingFace (~1GB).
+
+Detalhes em [`BACKEND.md`](BACKEND.md).
 
 ## Comandos (CLI)
 

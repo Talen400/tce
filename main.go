@@ -6,7 +6,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -22,6 +25,8 @@ import (
 
 var version = "0.1.0"
 
+var pythonCmd *exec.Cmd
+
 func main() {
 	model := flag.String("model", "", "LLM model name")
 	baseURL := flag.String("base-url", "", "LLM API base URL")
@@ -31,8 +36,24 @@ func main() {
 	minimal := flag.Bool("minimal", false, "Use minimal prompt (better for small models <4B)")
 	cliMode := flag.Bool("cli", false, "Use CLI mode instead of TUI")
 	contextSize := flag.Int("context-size", 0, "Max context tokens before compaction (0=auto)")
+	serveMode := flag.Bool("serve", false, "Start local Python backend automatically")
 	showVersion := flag.Bool("version", false, "Show version")
 	flag.Parse()
+
+	if *serveMode {
+		pythonCmd = startPythonBackend()
+		defer func() {
+			if pythonCmd != nil && pythonCmd.Process != nil {
+				pythonCmd.Process.Kill()
+			}
+		}()
+		if *baseURL == "" {
+			*baseURL = "http://127.0.0.1:8001/v1"
+		}
+		if *apiKey == "" {
+			*apiKey = "not-needed"
+		}
+	}
 
 	if *showVersion {
 		fmt.Printf("tce v%s\n", version)
@@ -227,6 +248,75 @@ func runCLI(ctx context.Context, ag *agent.Agent, profile *project.Profile, agen
 
 		fmt.Printf("(completed in %s)\n", time.Since(start).Round(time.Millisecond))
 	}
+}
+
+func startPythonBackend() *exec.Cmd {
+	script := filepath.Join(filepath.Dir(os.Args[0]), "serve.py")
+	if _, err := os.Stat(script); os.IsNotExist(err) {
+		cwd, _ := os.Getwd()
+		script = filepath.Join(cwd, "serve.py")
+	}
+	if _, err := os.Stat(script); os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "serve.py not found next to binary or in current directory\n")
+		os.Exit(1)
+	}
+
+	port := "8001"
+	healthURL := "http://127.0.0.1:" + port + "/health"
+	hc := &http.Client{Timeout: 1 * time.Second}
+
+	if resp, err := hc.Get(healthURL); err == nil {
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode == 200 {
+			fmt.Println("Python backend already running on port " + port)
+			return nil
+		}
+		fmt.Fprintf(os.Stderr, "Port %s is in use but not a TCE backend\n", port)
+		os.Exit(1)
+	}
+
+	dir := filepath.Dir(script)
+	venvPython := filepath.Join(dir, ".venv", "bin", "python3")
+	python := "python3"
+	if _, err := os.Stat(venvPython); err == nil {
+		python = venvPython
+	}
+
+	cmd := exec.Command(python, script)
+	cmd.Dir = dir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to start Python backend: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Waiting for Python backend to be ready...")
+	ready := false
+	for i := 0; i < 60; i++ {
+		resp, err := hc.Get(healthURL)
+		if err == nil {
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			if resp.StatusCode == 200 {
+				ready = true
+				break
+			}
+		}
+		time.Sleep(1 * time.Second)
+	}
+	if !ready {
+		fmt.Fprintf(os.Stderr, "Python backend did not start in time\n")
+		cmd.Process.Kill()
+		os.Exit(1)
+	}
+
+	go func() {
+		cmd.Wait()
+	}()
+
+	return cmd
 }
 
 func truncate(s string, n int) string {
