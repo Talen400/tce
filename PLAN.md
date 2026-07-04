@@ -51,10 +51,10 @@
 
 ## Fase 5 — Distribuição
 
-- [ ] Publicar releases no GitHub com binários pré-compilados (Linux/macOS/Windows, amd64/arm64)
-- [ ] Ajustar `install.sh` para baixar binário da release ao invés de exigir Go instalado
-- [ ] Publicar fórmula Homebrew (`brew install talen400/tce/tce`)
-- [ ] Página de documentação (GitHub Pages ou README expandido) com exemplos de uso por perfil de modelo
+- [x] Publicar releases no GitHub com binários pré-compilados (Linux/macOS/Windows, amd64/arm64)
+- [x] Ajustar `install.sh` para baixar binário da release ao invés de exigir Go instalado
+- [x] Publicar fórmula Homebrew (`brew install talen400/tce/tce`)
+- [x] Página de documentação (GitHub Pages ou README expandido) com exemplos de uso por perfil de modelo
 
 ## Fase 6 — Qualidade contínua
 

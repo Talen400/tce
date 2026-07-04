@@ -149,3 +149,41 @@
 - `strings.Cut("tools:", ":")` returns `("tools", "", true)` — need to check if trimmed val is empty AND if next line is indented to detect YAML blocks
 - `tea.ExecCommand` doesn't exist in Bubble Tea — use `os/exec.Command` for standalone commands outside the Bubble Tea event loop
 - Method value vs function: Go allows `cfg.parseTopLevel` as a function value (no `&` needed), but `func() { cfg.parseTopLevel(...) }` closure is also needed in some contexts
+
+---
+
+## 2026-07-03 — Phase 5: Distribuição
+
+**Feito:**
+- Created `.github/workflows/release.yml`:
+  - Triggers on `v*` tag pushes
+  - Builds for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64
+  - Embeds version via `-ldflags="-X main.version=${GITHUB_REF_NAME#v}"`
+  - Generates SHA256 checksums
+  - Creates GitHub release with `softprops/action-gh-release`
+- Created `install.sh`:
+  - Detects OS and architecture (linux/darwin/windows, amd64/arm64)
+  - Downloads latest (or specific) release binary from GitHub
+  - Installs to `$BINDIR` (default: `~/.local/bin`)
+  - Usage: `curl -fsSL https://raw.githubusercontent.com/talen400/tce/main/install.sh | bash`
+- Created `tce.rb` Homebrew formula:
+  - Supports macOS (arm64/amd64) and Linux (arm64/amd64)
+  - Installs to `bin/tce`
+  - Includes basic test (`tce --version`)
+  - Ready to push to `github.com/talen400/homebrew-tce`
+- Expanded README.md:
+  - Added install methods (binary, Homebrew, source)
+  - Added `--branch`, `--output`, `--resume` flags to docs
+  - Added /git command to CLI commands list
+  - Added usage examples per model profile (small/medium/large)
+  - Updated architecture diagram with mcp/, config/, session/ packages
+  - Added `commit`, `review`, `undo` to tools table
+  - Added Custom Tools and MCP Servers documentation sections
+  - Added Scenario 5 (Git workflow)
+
+**Aprendizado:**
+- `softprops/action-gh-release@v2` needs `contents: write` permission in the workflow
+- `uname -m` outputs different arch names across platforms — must normalize (x86_64 → amd64, aarch64 → arm64)
+- Homebrew formula checksum must be updated per-release — automated with CI or goreleaser
+- The `-ldflags="-s -w -X main.version=X"` strips debug info and injects version at build time
+- A Homebrew tap needs a separate repo (`homebrew-tce`) with the formula placed at `Formula/tce.rb`
