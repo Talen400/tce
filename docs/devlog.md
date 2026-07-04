@@ -84,3 +84,40 @@
 - `git diff --stat` gives a file summary; `git diff` gives the full patch — using both for different contexts (summary for display, patch for LLM context)
 - The `CommitTool` follows the same pattern as other tools: returns useful info when called without args, takes action when called with args
 - Using `os/exec` directly (instead of going through BashTool) avoids the security blocklist — these git commands are safe by intent
+
+---
+
+## 2026-07-03 — Phase 4: Extensibilidade
+
+**Feito:**
+- Created `ExternalTool` in `internal/tools/external.go`:
+  - Wraps a shell command template with `{{param}}` placeholders
+  - Auto-generates JSON schema from template variables
+  - Parameters can be passed as `{"params": {"path": "src/"}}` or flat `{"path": "src/"}`
+  - Executes via `sh -c` in the project root
+  - Used e.g.: `format: { command: "clang-format -i {{path}}", description: "Format C files" }`
+- Created MCP client in `internal/mcp/mcp.go`:
+  - Full JSON-RPC 2.0 implementation over stdio with Content-Length framing
+  - Handles initialize/tools/list/tools/call handshake
+  - Thread-safe with mutex for write serialization
+  - Supports notifications (no response expected)
+  - Error handling for RPC errors
+- Created `ToolAdapter` in `internal/mcp/tool.go`:
+  - Wraps MCP tool definitions as `tools.Tool` interface
+  - Registers with `mcp_` prefix (e.g., `mcp_read_file`)
+- Extended config parser in `internal/config/config.go`:
+  - Added block-level YAML parsing (indentation-aware)
+  - Supports `tools:` and `mcp_servers:` sections with nested key-value blocks
+  - Backwards-compatible with existing flat config
+  - Includes `parseJSONArray` for parsing `args: ["a", "b"]`
+- Wired in main.go:
+  - External tools from `.tce.yaml` are registered automatically
+  - MCP servers are connected at startup; their tools registered with `mcp_` prefix
+  - Errors connecting to MCP servers are warned but don't block startup
+
+**Aprendizado:**
+- `firstOf` returns `string`, not `any` — cannot type-assert on it; use direct map access
+- Method values in Go: `cfg.parseTopLevel` works as a function value (no `&` needed)
+- MCP Content-Length framing requires careful buffering with `bufio.Reader`
+- YAML block parsing is deceptively tricky; indent-aware line scanning works for the subset we need
+- MCP tool schemas map naturally to the existing `Tool` interface

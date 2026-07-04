@@ -17,6 +17,7 @@ import (
 	"github.com/talen/tce/internal/agent"
 	"github.com/talen/tce/internal/config"
 	"github.com/talen/tce/internal/llm"
+	"github.com/talen/tce/internal/mcp"
 	"github.com/talen/tce/internal/project"
 	"github.com/talen/tce/internal/session"
 	"github.com/talen/tce/internal/tools"
@@ -111,6 +112,51 @@ func main() {
 	toolReg.Register(&tools.UndoTool{})
 	toolReg.Register(&tools.CommitTool{})
 	toolReg.Register(&tools.ReviewTool{})
+
+	// Register external tools from .tce.yaml
+	for name, tc := range projectCfg.Tools {
+		desc := tc.Description
+		if desc == "" {
+			desc = fmt.Sprintf("Custom tool: %s", tc.Command)
+		}
+		toolReg.Register(&tools.ExternalTool{
+			NameVal:      name,
+			DescVal:      desc,
+			ShortDescVal: desc,
+			Command:      tc.Command,
+		})
+	}
+
+	// Connect to MCP servers from .tce.yaml and register their tools
+	for name, mc := range projectCfg.MCPServers {
+		mcpCfg := mcp.MCPServerConfig{
+			Name:    name,
+			Command: mc.Command,
+			Args:    mc.Args,
+		}
+		mcpClient, err := mcp.NewClient(mcpCfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: MCP server %q failed: %v\n", name, err)
+			continue
+		}
+		toolDefs, err := mcpClient.ListTools()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: MCP server %q tools/list failed: %v\n", name, err)
+			mcpClient.Close()
+			continue
+		}
+		for _, td := range toolDefs {
+			desc := td.Description
+			if desc == "" {
+				desc = fmt.Sprintf("MCP tool %s from server %s", td.Name, name)
+			}
+			toolReg.Register(&mcp.ToolAdapter{
+				Def:      td,
+				Client:   mcpClient,
+				ToolDesc: desc,
+			})
+		}
+	}
 
 	at := agent.AgentType(*agentType)
 	if at != agent.AgentBuild && at != agent.AgentPlan && at != agent.AgentExplore {

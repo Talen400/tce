@@ -45,9 +45,9 @@
 
 ## Fase 4 — Extensibilidade
 
-- [ ] Abstrair interface `Tool` para permitir tools nativas e tools externas
-- [ ] Cliente MCP (stdio/SSE) para conectar servidores MCP externos como tools
-- [ ] Sistema de plugins simples (Go plugins ou subprocessos) para tools customizadas por usuário
+- [x] Abstrair interface `Tool` para permitir tools nativas e tools externas
+- [x] Cliente MCP (stdio/SSE) para conectar servidores MCP externos como tools
+- [x] Sistema de plugins simples (Go plugins ou subprocessos) para tools customizadas por usuário
 
 ## Fase 5 — Distribuição
 
