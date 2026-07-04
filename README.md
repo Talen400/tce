@@ -298,42 +298,75 @@ This works with any model that outputs `{"name":"...","arguments":{...}}` in its
 
 ## Architecture
 
-```
-main.go                     → CLI + TUI entry point
-internal/
-├── agent/
-│   ├── loop.go             → Run(), RunSubAgent(), stall detection
-│   └── prompt.go           → BuildSystemPrompt / Minimal prompt
-├── compactor/
-│   └── compactor.go        → Context compaction, pruning, truncation
-├── config/
-│   └── config.go           → .tce.yaml parser (model, agent, tools, mcp)
-├── llm/
-│   ├── client.go           → Chat(), ChatStream(), SSE parser, retry, JSON extraction fallback
-│   └── model.go            → Model profiles (context, temperature, mode)
-├── mcp/
-│   ├── mcp.go              → MCP client (JSON-RPC 2.0 over stdio)
-│   └── tool.go             → ToolAdapter: wraps MCP tools as Tool interface
-├── tools/
-│   ├── parse.go            → firstOf, tryFixJSON, fuzzyMatch
-│   ├── registry.go         → Tool interface, Registry, Execute()
-│   ├── external.go         → ExternalTool (shell commands as tools)
-│   ├── git.go              → CommitTool, ReviewTool
-│   ├── ignore.go           → IgnoreMatcher gitignore-style
-│   ├── diff.go             → unifiedDiff helper
-│   ├── undo.go             → PushUndo/PopUndo/ClearUndo + UndoTool
-│   ├── read.go             → ReadTool, GrepTool, GlobTool
-│   ├── write.go            → WriteTool, EditTool
-│   ├── bash.go             → BashTool
-│   ├── ask.go              → AskTool
-│   ├── task.go             → TaskTool (sub-agent)
-│   └── search.go           → SearchTool (DuckDuckGo)
-├── permission/             → Access control rules
-├── project/                → Language/framework detection
-│   └── detect.go           → Makefile, go.mod, Cargo.toml, etc.
-├── tui/                    → Bubbletea terminal UI
-├── session/                → Session persistence
-└── util/                   → Truncate, helpers
+```mermaid
+graph TB
+    subgraph Entry
+        main[main.go]
+    end
+
+    subgraph Agent
+        agent[agent/loop.go]
+        prompt[agent/prompt.go]
+        subAgent[task tool → sub-agent]
+    end
+
+    subgraph LLM
+        client[llm/client.go<br/>Chat + ChatStream]
+        sse[SSE Parser]
+        extract[JSON Extraction]
+        model[model.go<br/>Model Profiles]
+    end
+
+    subgraph Tools
+        registry[tools/registry.go<br/>Tool interface]
+        read[ReadTool]
+        write[WriteTool]
+        edit[EditTool]
+        bash[BashTool<br/>+ blocklist]
+        grep[GrepTool]
+        glob[GlobTool]
+        search[SearchTool]
+        ask[AskTool]
+        task[TaskTool]
+        commit[CommitTool]
+        review[ReviewTool]
+        undo[UndoTool]
+        external[ExternalTool<br/>shell commands]
+        mcp_adapter[mcp/ToolAdapter]
+    end
+
+    subgraph Config
+        config[config/config.go<br/>.tce.yaml parser]
+        project[project/detect.go]
+        session[session/session.go<br/>persistence]
+        telemetry[telemetry/telemetry.go<br/>error reporting]
+    end
+
+    subgraph UI
+        tui[tui/tui.go<br/>Bubble Tea]
+        cli[CLI mode]
+    end
+
+    subgraph MCP
+        mcp[mcp/mcp.go<br/>JSON-RPC 2.0]
+        mcp_server[External MCP Servers]
+    end
+
+    main --> tui & cli
+    cli --> agent
+    tui --> agent
+    agent --> client
+    client --> sse & extract
+    agent --> registry
+    registry --> read & write & edit & bash & grep & glob & search & ask & task
+    registry --> commit & review & undo
+    registry --> external
+    registry --> mcp_adapter
+    mcp_adapter --> mcp
+    mcp --> mcp_server
+    agent --> config & project & session & telemetry
+    agent --> subAgent
+    subAgent --> agent
 ```
 
 ### Key Design Decisions

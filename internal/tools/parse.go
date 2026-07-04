@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+// firstOf tries each key in order and returns the first non-empty string value.
+// Multiple aliases per parameter give resilience against LLM naming variations (ADR-002).
 func firstOf(raw map[string]any, keys ...string) string {
 	for _, key := range keys {
 		if v, ok := raw[key]; ok {
@@ -17,6 +19,8 @@ func firstOf(raw map[string]any, keys ...string) string {
 	return ""
 }
 
+// tryFixJSON recovers malformed JSON from LLM output — common with models
+// that nest tool calls inside markdown or use single quotes (ADR-003).
 func tryFixJSON(raw json.RawMessage) json.RawMessage {
 	s := strings.TrimSpace(string(raw))
 	if s == "" {

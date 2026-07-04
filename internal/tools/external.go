@@ -9,6 +9,9 @@ import (
 	"strings"
 )
 
+// ExternalTool wraps a shell command as a registered Tool (ADR-002).
+// Parameters are defined via {{param}} placeholders in the Command string;
+// Schema() auto-generates a JSON schema from these placeholders.
 type ExternalTool struct {
 	NameVal        string
 	DescVal        string

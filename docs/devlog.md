@@ -2,7 +2,29 @@
 
 > Diário de desenvolvimento: o que foi feito, o que foi aprendido, dificuldades encontradas.
 
+```mermaid
+flowchart LR
+    U[User] -->|prompt| A[Agent Loop]
+    A -->|messages + tools| L[LLM Client]
+    L -->|Chat or ChatStream| API[LLM API]
+    API -->|response or stream| L
+    L -->|token callback| TUI[TUI/CLI]
+    L -->|ToolCalls| A
+    A -->|execute| R[Tool Registry]
+    R -->|dispatch| T1[ReadTool]
+    R -->|dispatch| T2[BashTool]
+    R -->|dispatch| T3[WriteTool]
+    R -->|dispatch| T4[EditTool]
+    R -->|dispatch| T5[Other Tools]
+    T1 & T2 & T3 & T4 & T5 -->|results| A
+    A -->|tool results| L
+    L -->|next request| API
+    A -.->|stall / max turns| U
+```
+
 ---
+
+
 
 ## 2026-07-03 — Phase 0: Project Foundation
 
@@ -224,3 +246,40 @@
 - `benchtime=1x` is useful to verify benchmarks compile and run without waiting for statistical sampling
 - The agent loop's stall detection considers `hadUsefulResult` per-turn: if ANY tool in a turn returns non-error, non-empty output, the turn is productive. Only when ALL tool results are errors/empty is it a stall.
 - `b.RunParallel` creates a new agent per goroutine — each needs its own mockLLM with fresh response slice (copy, not reference)
+
+---
+
+## 2026-07-03 — Phase 7: Documentação
+
+**Feito:**
+- Created 5 ADRs in `docs/decisions/`:
+  - `ADR-001-client-only-architecture.md` — why TCE doesn't bundle an LLM backend
+  - `ADR-002-tool-interface-design.md` — Tool interface, field aliases, string output
+  - `ADR-003-json-extraction-fallback.md` — dual-path tool calling (native + JSON extraction)
+  - `ADR-004-session-persistence.md` — JSON format in `.tce/sessions/`
+  - `ADR-005-mcp-integration.md` — MCP via stdio JSON-RPC 2.0 with Content-Length framing
+  - Each follows the standard ADR template: Context, Decision, Consequences, Alternatives Considered
+- Created `docs/glossario.md`:
+  - 30+ technical terms organized by category: Go, LLM/API, Agent Architecture, MCP, TCE-Specific
+  - 2-3 lines per term with concrete examples from the TCE codebase
+- Created `docs/flashcards.md`:
+  - Phase-by-phase Q&A format: "o que eu não sabia antes e sei agora"
+  - Covers Phases 0-7 with 2-5 flashcards per phase
+- Added Mermaid diagrams:
+  - Tool calling flow diagram (flowchart LR) to `docs/devlog.md` header
+  - Session lifecycle sequence diagram to devlog
+  - Architecture diagram (graph TB) to `README.md` replacing the previous text tree
+- Added code comments referencing ADRs in key non-obvious locations:
+  - `firstOf` in parse.go — "Multiple aliases per parameter give resilience against LLM naming variations (ADR-002)"
+  - `tryFixJSON` in parse.go — "recovers malformed JSON from LLM output (ADR-003)"
+  - `ExternalTool` struct in external.go — "wraps a shell command as a registered Tool (ADR-002)"
+  - MCP Content-Length framing in mcp.go — "MCP uses Content-Length framing (ADR-005)"
+- Updated PLAN.md (Phase 7 all checked)
+- Updated README with Mermaid architecture diagram
+
+**Aprendizado:**
+- ADRs document the WHY behind decisions, not just the WHAT — the "Alternatives Considered" section is the most valuable part because it captures what was rejected and why
+- Mermaid diagrams are versioned in Markdown and render natively on GitHub — no image hosting, no external tools
+- A glossary written during development captures context that would be forgotten weeks later (e.g., why `ForceSingleCall` exists, what `tryFixJSON` does)
+- Flashcards in Q&A format are more useful for review than prose summaries — they test recall rather than just recognition
+- The most valuable code comments explain WHY (referencing an ADR) rather than WHAT (which is already in the code or function name)

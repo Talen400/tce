@@ -64,13 +64,13 @@
 
 ## Fase 7 — Documentação e acompanhamento de estudo
 
-- [ ] Criar `docs/decisions/` com ADRs (Architecture Decision Records) — um arquivo curto por decisão técnica relevante (contexto, decisão, alternativas consideradas, consequências)
-- [ ] Criar `docs/devlog.md` — diário de desenvolvimento com entradas cronológicas curtas: o que foi feito, o que foi aprendido, dificuldades encontradas
-- [ ] Criar `docs/glossario.md` — conceitos técnicos aprendidos durante o projeto (Go, arquitetura de agentes, LLM tooling, MCP, etc.), 2-3 linhas por termo
-- [ ] Padronizar comentários de código para explicar o "porquê" das decisões não óbvias, referenciando o ADR correspondente quando existir
-- [ ] Adicionar diagramas versionados em Mermaid dentro dos `.md` (fluxo de tool calling, arquitetura geral, ciclo de vida de uma sessão)
-- [ ] Ao final de cada fase do roadmap, escrever um resumo "o que eu não sabia antes e sei agora" (formato flashcard, revisão rápida)
-- [ ] Manter mensagens de commit descritivas o suficiente para servirem como changelog de aprendizado (não só "fix bug")
+- [x] Criar `docs/decisions/` com ADRs (Architecture Decision Records) — um arquivo curto por decisão técnica relevante (contexto, decisão, alternativas consideradas, consequências)
+- [x] Criar `docs/devlog.md` — diário de desenvolvimento com entradas cronológicas curtas: o que foi feito, o que foi aprendido, dificuldades encontradas
+- [x] Criar `docs/glossario.md` — conceitos técnicos aprendidos durante o projeto (Go, arquitetura de agentes, LLM tooling, MCP, etc.), 2-3 linhas por termo
+- [x] Padronizar comentários de código para explicar o "porquê" das decisões não óbvias, referenciando o ADR correspondente quando existir
+- [x] Adicionar diagramas versionados em Mermaid dentro dos `.md` (fluxo de tool calling, arquitetura geral, ciclo de vida de uma sessão)
+- [x] Ao final de cada fase do roadmap, escrever um resumo "o que eu não sabia antes e sei agora" (formato flashcard, revisão rápida)
+- [x] Manter mensagens de commit descritivas o suficiente para servirem como changelog de aprendizado (não só "fix bug")
 
 ---
 

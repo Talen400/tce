@@ -210,6 +210,8 @@ func (c *Client) writeMessage(msg any) error {
 		return err
 	}
 
+	// MCP uses Content-Length framing: each message is preceded by
+	// "Content-Length: N\r\n\r\n" followed by N bytes of JSON body (ADR-005).
 	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(data))
 	if _, err := c.stdin.Write([]byte(header)); err != nil {
 		return err
