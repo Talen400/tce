@@ -35,9 +35,9 @@ type Tool interface {
 }
 
 type Registry struct {
-	mu           sync.RWMutex
-	tools        map[string]Tool
-	toolErrors   map[string]int
+	mu            sync.RWMutex
+	tools         map[string]Tool
+	toolErrors    map[string]int
 	maxToolErrors int
 
 	disabledTools map[string]bool

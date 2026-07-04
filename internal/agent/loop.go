@@ -63,14 +63,14 @@ type Config struct {
 }
 
 type Agent struct {
-	cfg            Config
-	perm           *permission.Checker
-	compactor      *compactor.Compactor
-	messages       []llm.Message
-	cachedToolDefs []llm.ToolDef
-	depth          int
-	jsonRetries    int
-	turnCount      int
+	cfg               Config
+	perm              *permission.Checker
+	compactor         *compactor.Compactor
+	messages          []llm.Message
+	cachedToolDefs    []llm.ToolDef
+	depth             int
+	jsonRetries       int
+	turnCount         int
 	totalInputTokens  int
 	totalOutputTokens int
 }
@@ -257,7 +257,7 @@ func (a *Agent) Run(ctx context.Context, userPrompt string, onToken func(string)
 			if action == permission.Ask {
 				fmt.Printf("\n⚠️  %s (y/N): ", msg)
 				var answer string
-				fmt.Scanln(&answer)
+				_, _ = fmt.Scanln(&answer)
 				answer = strings.TrimSpace(strings.ToLower(answer))
 				if answer != "y" && answer != "yes" {
 					errMsg := fmt.Sprintf("User denied tool %q", tc.Name)

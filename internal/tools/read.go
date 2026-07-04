@@ -12,8 +12,10 @@ import (
 
 type ReadTool struct{}
 
-func (t *ReadTool) Name() string        { return "read" }
-func (t *ReadTool) Description() string { return "Read the contents of a file. Include line numbers in the output." }
+func (t *ReadTool) Name() string { return "read" }
+func (t *ReadTool) Description() string {
+	return "Read the contents of a file. Include line numbers in the output."
+}
 func (t *ReadTool) ShortDescription() string { return "Read file contents" }
 
 func (t *ReadTool) Schema() any {
@@ -112,8 +114,10 @@ func (t *ReadTool) Execute(ctx ExecContext, input json.RawMessage) (string, erro
 
 type GrepTool struct{}
 
-func (t *GrepTool) Name() string        { return "grep" }
-func (t *GrepTool) Description() string { return "Search file contents using a regex pattern. Returns matching file paths, line numbers, and content." }
+func (t *GrepTool) Name() string { return "grep" }
+func (t *GrepTool) Description() string {
+	return "Search file contents using a regex pattern. Returns matching file paths, line numbers, and content."
+}
 func (t *GrepTool) ShortDescription() string { return "Search files with regex" }
 
 func (t *GrepTool) Schema() any {
@@ -242,8 +246,10 @@ func (t *GrepTool) executeWith(ctx ExecContext, pattern, include, path string) (
 
 type GlobTool struct{}
 
-func (t *GlobTool) Name() string        { return "glob" }
-func (t *GlobTool) Description() string { return "Find files matching a glob pattern. Example: '**/*.go', 'src/**/*.ts'" }
+func (t *GlobTool) Name() string { return "glob" }
+func (t *GlobTool) Description() string {
+	return "Find files matching a glob pattern. Example: '**/*.go', 'src/**/*.ts'"
+}
 func (t *GlobTool) ShortDescription() string { return "Find files by pattern" }
 
 func (t *GlobTool) Schema() any {

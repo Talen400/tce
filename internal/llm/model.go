@@ -16,40 +16,40 @@ type Profile struct {
 
 var profiles = map[string]Profile{
 	"qwen3.5:0.8b": {
-		MaxContext: 10000, MaxTurns: 15, Temperature: 0.2,
+		MaxContext: 10000, MaxTurns: 15, Temperature: 0.0,
 		MinimalMode: true, MaxToolContent: 500, KeepTurns: 1,
 		TokenRatio: 3.5, ForceSingleCall: true,
 	},
 	"qwen3.5:2b": {
-		MaxContext: 16000, MaxTurns: 20, Temperature: 0.15,
+		MaxContext: 16000, MaxTurns: 20, Temperature: 0.0,
 		MinimalMode: true, MaxToolContent: 800, KeepTurns: 2,
 		TokenRatio: 3.5, ForceSingleCall: false,
 	},
 }
 
 var prefixes = []struct {
-	prefix string
+	prefix  string
 	profile Profile
 }{
 	{"qwen3.5:0.8b", Profile{
-		MaxContext: 10000, MaxTurns: 15, Temperature: 0.2,
+		MaxContext: 10000, MaxTurns: 15, Temperature: 0.0,
 		MinimalMode: true, MaxToolContent: 500, KeepTurns: 1,
 		TokenRatio: 3.5, ForceSingleCall: true,
 	}},
 	{"qwen3.5:2b", Profile{
-		MaxContext: 16000, MaxTurns: 20, Temperature: 0.15,
+		MaxContext: 16000, MaxTurns: 20, Temperature: 0.0,
 		MinimalMode: true, MaxToolContent: 800, KeepTurns: 2,
 		TokenRatio: 3.5, ForceSingleCall: false,
 	}},
 	{"qwen3.5", Profile{
-		MaxContext: 20000, MaxTurns: 25, Temperature: 0.2,
+		MaxContext: 20000, MaxTurns: 25, Temperature: 0.0,
 		MinimalMode: false, MaxToolContent: 1000, KeepTurns: 2,
 		TokenRatio: 3.5, ForceSingleCall: false,
 	}},
 }
 
 var defaultProfile = Profile{
-	MaxContext: 24000, MaxTurns: 25, Temperature: 0.2,
+	MaxContext: 24000, MaxTurns: 25, Temperature: 0.0,
 	MinimalMode: false, MaxToolContent: 1000, KeepTurns: 2,
 	TokenRatio: 4.0, ForceSingleCall: false,
 }

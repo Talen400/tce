@@ -103,7 +103,7 @@ func TestFirstMatchWins(t *testing.T) {
 		t.Errorf("write should match first rule (deny), got %v %s", action, msg)
 	}
 
-	action, msg = c.Check("bash")
+	action, _ = c.Check("bash")
 	if action != Allow {
 		t.Errorf("bash should match second rule (allow), got %v", action)
 	}

@@ -191,5 +191,3 @@ func (c *Compactor) estimateMessages(msgs []llm.Message) int {
 	}
 	return total
 }
-
-

@@ -142,17 +142,6 @@ func mockLLMServer(t *testing.T, responses []llm.Response) *httptest.Server {
 	return srv
 }
 
-// apiToolCall mirrors the OpenAI API tool call format for the mock server.
-type apiToolCall struct {
-	ID       string `json:"id"`
-	Index    int    `json:"index,omitempty"`
-	Type     string `json:"type"`
-	Function struct {
-		Name      string `json:"name"`
-		Arguments string `json:"arguments"`
-	} `json:"function"`
-}
-
 func testLLMClient(serverURL string) *llm.Client {
 	cfg := llm.DefaultConfig
 	cfg.BaseURL = serverURL
@@ -186,11 +175,11 @@ func TestE2EHttpMockServer(t *testing.T) {
 
 	client := testLLMClient(srv.URL)
 	agent := New(Config{
-		Type:      AgentBuild,
-		LLM:       client,
-		Tools:     fullTestRegistry(),
-		Project:   testProfile(t.TempDir()),
-		MaxTurns:  5,
+		Type:       AgentBuild,
+		LLM:        client,
+		Tools:      fullTestRegistry(),
+		Project:    testProfile(t.TempDir()),
+		MaxTurns:   5,
 		MaxContext: 16000,
 	})
 
@@ -276,11 +265,11 @@ func TestE2EMultiToolCall(t *testing.T) {
 
 	client := testLLMClient(srv.URL)
 	agent := New(Config{
-		Type:      AgentBuild,
-		LLM:       client,
-		Tools:     fullTestRegistry(),
-		Project:   testProfile(t.TempDir()),
-		MaxTurns:  5,
+		Type:       AgentBuild,
+		LLM:        client,
+		Tools:      fullTestRegistry(),
+		Project:    testProfile(t.TempDir()),
+		MaxTurns:   5,
 		MaxContext: 16000,
 	})
 
@@ -323,11 +312,11 @@ func TestE2EFileReadWrite(t *testing.T) {
 
 	client := testLLMClient(srv.URL)
 	agent := New(Config{
-		Type:      AgentBuild,
-		LLM:       client,
-		Tools:     fullTestRegistry(),
-		Project:   testProfile(tmpDir),
-		MaxTurns:  5,
+		Type:       AgentBuild,
+		LLM:        client,
+		Tools:      fullTestRegistry(),
+		Project:    testProfile(tmpDir),
+		MaxTurns:   5,
 		MaxContext: 16000,
 	})
 

@@ -139,11 +139,11 @@ func TestAgentMaxTurns(t *testing.T) {
 	}
 
 	agent := New(Config{
-		Type:      AgentBuild,
-		LLM:       &mockLLM{responses: responses},
-		Tools:     testRegistry(),
-		Project:   testProfile(t.TempDir()),
-		MaxTurns:  3,
+		Type:     AgentBuild,
+		LLM:      &mockLLM{responses: responses},
+		Tools:    testRegistry(),
+		Project:  testProfile(t.TempDir()),
+		MaxTurns: 3,
 	})
 
 	_, err := agent.Run(context.Background(), "do it", nil, nil, nil)
@@ -352,4 +352,3 @@ func BenchmarkAgentSearchWriteFlow(b *testing.B) {
 		}
 	}
 }
-

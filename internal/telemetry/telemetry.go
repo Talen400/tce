@@ -100,8 +100,8 @@ func (r *Reporter) appendReport(report ErrorReport) {
 	}
 	defer f.Close()
 	data, _ := json.Marshal(report)
-	f.Write(data)
-	f.WriteString("\n")
+	_, _ = f.Write(data)
+	_, _ = f.WriteString("\n")
 }
 
 // LoadReports reads all stored error reports.

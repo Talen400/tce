@@ -89,19 +89,12 @@ func extractSubAgent(raw map[string]any) string {
 }
 
 func extractPrompt(raw map[string]any) string {
-	if s := stringField(raw, "prompt"); s != "" {
-		return s
+	keys := []string{"prompt", "message", "task", "description", "instruction", "objective", "goal"}
+	for _, k := range keys {
+		if s := stringField(raw, k); s != "" {
+			return s
+		}
 	}
-	if s := stringField(raw, "message"); s != "" {
-		return s
-	}
-	if s := stringField(raw, "task"); s != "" {
-		return s
-	}
-	if s := stringField(raw, "description"); s != "" {
-		return s
-	}
-
 	if params := stringField(raw, "parameters"); params != "" {
 		var inner map[string]any
 		if json.Unmarshal([]byte(params), &inner) == nil {
@@ -111,7 +104,6 @@ func extractPrompt(raw map[string]any) string {
 		}
 		return params
 	}
-
 	return ""
 }
 

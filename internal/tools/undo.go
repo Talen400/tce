@@ -13,8 +13,8 @@ type undoEntry struct {
 }
 
 var (
-	undoMu  sync.Mutex
-	undos   []undoEntry
+	undoMu sync.Mutex
+	undos  []undoEntry
 )
 
 // PushUndo saves the current content of a file so it can be restored later via PopUndo.
@@ -54,13 +54,15 @@ func ClearUndo() {
 
 type UndoTool struct{}
 
-func (t *UndoTool) Name() string        { return "undo" }
-func (t *UndoTool) Description() string { return "Undo the most recent write or edit operation by restoring the original file content." }
+func (t *UndoTool) Name() string { return "undo" }
+func (t *UndoTool) Description() string {
+	return "Undo the most recent write or edit operation by restoring the original file content."
+}
 func (t *UndoTool) ShortDescription() string { return "Undo last write/edit" }
 
 func (t *UndoTool) Schema() any {
 	return map[string]any{
-		"type": "object",
+		"type":       "object",
 		"properties": map[string]any{},
 	}
 }

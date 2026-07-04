@@ -9,6 +9,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -27,7 +28,7 @@ var DefaultConfig = Config{
 	BaseURL:     "http://localhost:11434/v1",
 	APIKey:      "ollama",
 	Model:       "qwen3.5:4b",
-	Temperature: 0.2,
+	Temperature: 0.0,
 	MaxTokens:   4096,
 	Timeout:     120 * time.Second,
 }
@@ -142,13 +143,13 @@ func (c *Client) ModelName() string {
 }
 
 type chatRequest struct {
-	Model          string      `json:"model"`
-	Messages       []Message   `json:"messages"`
-	Tools          []ToolDef   `json:"tools,omitempty"`
-	Temperature    float32     `json:"temperature"`
-	MaxTokens      int         `json:"max_tokens,omitempty"`
-	Stream         bool        `json:"stream"`
-	ResponseFormat any         `json:"response_format,omitempty"`
+	Model          string    `json:"model"`
+	Messages       []Message `json:"messages"`
+	Tools          []ToolDef `json:"tools,omitempty"`
+	Temperature    float32   `json:"temperature"`
+	MaxTokens      int       `json:"max_tokens,omitempty"`
+	Stream         bool      `json:"stream"`
+	ResponseFormat any       `json:"response_format,omitempty"`
 }
 
 func (c *Client) Chat(ctx context.Context, messages []Message, tools []ToolDef) (*Response, error) {
@@ -190,10 +191,17 @@ func (c *Client) Chat(ctx context.Context, messages []Message, tools []ToolDef) 
 	}
 
 	msg := apiResp.Choices[0].Message
-	return &Response{
+	r := &Response{
 		Content:   msg.Content,
 		ToolCalls: msg.ToolCalls,
-	}, nil
+	}
+	if len(r.ToolCalls) == 0 && r.Content != "" {
+		if tc := extractToolCall(r.Content); tc != nil {
+			r.ToolCalls = append(r.ToolCalls, *tc)
+			r.Content = ""
+		}
+	}
+	return r, nil
 }
 
 func (c *Client) ChatStream(ctx context.Context, messages []Message, tools []ToolDef, onChunk func(string)) (*Response, error) {
@@ -237,8 +245,8 @@ func (c *Client) ChatStream(ctx context.Context, messages []Message, tools []Too
 		var chunk struct {
 			Choices []struct {
 				Delta struct {
-					Content   string        `json:"content"`
-					Reasoning string        `json:"reasoning"`
+					Content   string         `json:"content"`
+					Reasoning string         `json:"reasoning"`
 					ToolCalls []*apiToolCall `json:"tool_calls"`
 				} `json:"delta"`
 				Finish string `json:"finish_reason"`
@@ -294,7 +302,238 @@ func (c *Client) ChatStream(ctx context.Context, messages []Message, tools []Too
 		}
 	}
 
+	if len(result.ToolCalls) == 0 && result.Content != "" {
+		if tc := extractToolCall(result.Content); tc != nil {
+			result.ToolCalls = append(result.ToolCalls, *tc)
+			result.Content = ""
+		}
+	}
+
 	return result, parser.err()
+}
+
+var toolCallPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"arguments"\s*:\s*(\{)`),
+	regexp.MustCompile(`\{\s*'name'\s*:\s*'([^']+)'\s*,\s*'arguments'\s*:\s*(\{)`),
+	regexp.MustCompile(`<tool_call>\s*(\{.*?\})\s*</tool_call>`),
+}
+
+var toolCallBlockPattern = regexp.MustCompile("```json\\s*(\\{.*?\\})\\s*```")
+
+func extractToolCall(text string) *ToolCall {
+	if text == "" {
+		return nil
+	}
+
+	// Try ```json blocks first (most explicit)
+	if m := toolCallBlockPattern.FindStringSubmatch(text); m != nil {
+		if tc := tryParseToolCallJSON(m[1]); tc != nil {
+			return tc
+		}
+	}
+
+	// Try <tool_call> tags next (Qwen template format)
+	for _, pat := range toolCallPatterns {
+		if pat.String() == `<tool_call>\s*(\{.*?\})\s*</tool_call>` {
+			if m := pat.FindStringSubmatch(text); m != nil {
+				if tc := tryParseToolCallJSON(m[1]); tc != nil {
+					return tc
+				}
+			}
+			continue
+		}
+		// For JSON patterns, use brace matching
+		m := pat.FindStringSubmatchIndex(text)
+		if m == nil {
+			continue
+		}
+		start := m[0]
+		end := findMatchingBrace(text, start)
+		if end < 0 {
+			continue
+		}
+		if tc := tryParseToolCallJSON(text[start : end+1]); tc != nil {
+			return tc
+		}
+	}
+
+	// Final fallback: find any {..."name"..."arguments"...} anywhere in text
+	if idx := strings.Index(text, `"name"`); idx >= 0 {
+		before := strings.LastIndex(text[:idx], "{")
+		if before >= 0 {
+			end := findMatchingBrace(text, before)
+			if end > 0 {
+				if tc := tryParseToolCallJSON(text[before : end+1]); tc != nil {
+					return tc
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func tryParseToolCallJSON(raw string) *ToolCall {
+	var candidate struct {
+		Name      string          `json:"name"`
+		Arguments json.RawMessage `json:"arguments"`
+	}
+	if err := json.Unmarshal([]byte(raw), &candidate); err == nil && candidate.Name != "" && len(candidate.Arguments) > 0 {
+		args, _ := candidate.Arguments.MarshalJSON()
+		return &ToolCall{
+			ID:        "tc_fallback_" + candidate.Name,
+			Name:      candidate.Name,
+			Arguments: string(args),
+		}
+	}
+
+	// Try with fixJSON for malformed JSON
+	if fixed := fixJSONBytes(json.RawMessage(raw)); fixed != nil {
+		if err := json.Unmarshal(fixed, &candidate); err == nil && candidate.Name != "" && len(candidate.Arguments) > 0 {
+			args, _ := candidate.Arguments.MarshalJSON()
+			return &ToolCall{
+				ID:        "tc_fallback_" + candidate.Name,
+				Name:      candidate.Name,
+				Arguments: string(args),
+			}
+		}
+	}
+
+	return nil
+}
+
+func convertSingleQuotes(s string) string {
+	var b strings.Builder
+	inString := false
+	escaped := false
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if escaped {
+			escaped = false
+			b.WriteByte(ch)
+			continue
+		}
+		if ch == '\\' {
+			escaped = true
+			b.WriteByte(ch)
+			continue
+		}
+		if ch == '"' {
+			inString = !inString
+			b.WriteByte(ch)
+			continue
+		}
+		if ch == '\'' && !inString {
+			b.WriteByte('"')
+		} else {
+			b.WriteByte(ch)
+		}
+	}
+	return b.String()
+}
+
+func fixJSONBytes(raw json.RawMessage) json.RawMessage {
+	s := strings.TrimSpace(string(raw))
+	if s == "" {
+		return nil
+	}
+
+	if s[0] != '{' {
+		idx := strings.Index(s, "{")
+		if idx >= 0 {
+			s = s[idx:]
+		} else {
+			return nil
+		}
+	}
+
+	closeIdx := strings.LastIndex(s, "}")
+	if closeIdx < 0 {
+		return nil
+	}
+	s = s[:closeIdx+1]
+
+	if json.Valid([]byte(s)) {
+		return json.RawMessage(s)
+	}
+
+	// Try converting single quotes to double quotes for JSON with 'name' style
+	s = convertSingleQuotes(s)
+	if json.Valid([]byte(s)) {
+		return json.RawMessage(s)
+	}
+
+	// Fix unescaped newlines inside strings (replace literal \n with \\n)
+	var b strings.Builder
+	inString := false
+	escaped := false
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if escaped {
+			escaped = false
+			b.WriteByte(ch)
+			continue
+		}
+		if ch == '\\' {
+			escaped = true
+			b.WriteByte(ch)
+			continue
+		}
+		if ch == '"' {
+			inString = !inString
+			b.WriteByte(ch)
+			continue
+		}
+		if inString && ch == '\n' {
+			b.WriteByte('\\')
+			b.WriteByte('n')
+		} else {
+			b.WriteByte(ch)
+		}
+	}
+	s = b.String()
+
+	if json.Valid([]byte(s)) {
+		return json.RawMessage(s)
+	}
+
+	return nil
+}
+
+func findMatchingBrace(s string, start int) int {
+	if start >= len(s) || s[start] != '{' {
+		return -1
+	}
+	depth := 0
+	inString := false
+	for i := start; i < len(s); i++ {
+		ch := s[i]
+		if inString {
+			if ch == '\\' {
+				i++
+				continue
+			}
+			if ch == '"' {
+				inString = false
+			}
+			continue
+		}
+		if ch == '"' {
+			inString = true
+			continue
+		}
+		if ch == '{' {
+			depth++
+			continue
+		}
+		if ch == '}' {
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
 }
 
 type sseParser struct {

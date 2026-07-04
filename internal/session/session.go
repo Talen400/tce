@@ -51,7 +51,7 @@ func Save(root, model string, turns, tokenIn, tokenOut int, messages []llm.Messa
 		return
 	}
 
-	os.WriteFile(path, data, 0644)
+	_ = os.WriteFile(path, data, 0644)
 }
 
 // Load reads a session file and returns its data.

@@ -316,3 +316,133 @@ func TestChatStreamEmptyChoices(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestExtractToolCallStandardJSON(t *testing.T) {
+	tc := extractToolCall(`{"name":"read","arguments":{"file_path":"main.c"}}`)
+	if tc == nil {
+		t.Fatal("expected tool call")
+	}
+	if tc.Name != "read" {
+		t.Errorf("expected read, got %s", tc.Name)
+	}
+	if tc.Arguments != `{"file_path":"main.c"}` {
+		t.Errorf("unexpected args: %s", tc.Arguments)
+	}
+}
+
+func TestExtractToolCallPrettyJSON(t *testing.T) {
+	tc := extractToolCall(`{
+		"name": "grep",
+		"arguments": {
+			"pattern": "printf",
+			"include": "*.c"
+		}
+	}`)
+	if tc == nil {
+		t.Fatal("expected tool call")
+	}
+	if tc.Name != "grep" {
+		t.Errorf("expected grep, got %s", tc.Name)
+	}
+}
+
+func TestExtractToolCallSingleQuotes(t *testing.T) {
+	tc := extractToolCall(`{'name':'bash','arguments':{'command':'ls -la'}}`)
+	if tc == nil {
+		t.Fatal("expected tool call from single-quoted JSON")
+	}
+	if tc.Name != "bash" {
+		t.Errorf("expected bash, got %s", tc.Name)
+	}
+}
+
+func TestExtractToolCallXMLTags(t *testing.T) {
+	tc := extractToolCall(`<tool_call>{"name":"read","arguments":{"file_path":"main.c"}}</tool_call>`)
+	if tc == nil {
+		t.Fatal("expected tool call from XML tags")
+	}
+	if tc.Name != "read" {
+		t.Errorf("expected read, got %s", tc.Name)
+	}
+}
+
+func TestExtractToolCallJSONBlock(t *testing.T) {
+	tc := extractToolCall("Here's the result:\n```json\n{\"name\":\"search\",\"arguments\":{\"query\":\"qsort\"}}\n```")
+	if tc == nil {
+		t.Fatal("expected tool call from json block")
+	}
+	if tc.Name != "search" {
+		t.Errorf("expected search, got %s", tc.Name)
+	}
+}
+
+func TestExtractToolCallWithSurroundingText(t *testing.T) {
+	tc := extractToolCall(`Let me look that up. {"name":"read","arguments":{"file_path":"main.c"}} Here's what I found.`)
+	if tc == nil {
+		t.Fatal("expected tool call from text with surrounding text")
+	}
+	if tc.Name != "read" {
+		t.Errorf("expected read, got %s", tc.Name)
+	}
+}
+
+func TestExtractToolCallNilForEmpty(t *testing.T) {
+	if tc := extractToolCall(""); tc != nil {
+		t.Error("expected nil for empty")
+	}
+	if tc := extractToolCall("Hello, how can I help?"); tc != nil {
+		t.Error("expected nil for plain text")
+	}
+	if tc := extractToolCall("```python\nprint('hello')\n```"); tc != nil {
+		t.Error("expected nil for non-JSON code block")
+	}
+}
+
+func TestFixJSONBytes(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantOK   bool
+		wantName string
+	}{
+		{"valid JSON", `{"name":"read","arguments":{"file_path":"x"}}`, true, "read"},
+		{"leading text", `some text {"name":"write","arguments":{}}`, true, "write"},
+		{"trailing garbage", `{"name":"bash","arguments":{}}
+and more text`, true, "bash"},
+		{"newlines in string", `{"name":"grep","arguments":{"pattern":"hello\nworld"}}`, true, "grep"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fixed := fixJSONBytes([]byte(tt.input))
+			if tt.wantOK && fixed == nil {
+				t.Fatal("expected fixed JSON, got nil")
+			}
+			if !tt.wantOK && fixed != nil {
+				t.Fatal("expected nil, got fixed JSON")
+			}
+			if fixed != nil {
+				var result struct {
+					Name string `json:"name"`
+				}
+				if err := json.Unmarshal(fixed, &result); err != nil {
+					t.Fatalf("unmarshal error: %v", err)
+				}
+				if result.Name != tt.wantName {
+					t.Errorf("expected name %s, got %s", tt.wantName, result.Name)
+				}
+			}
+		})
+	}
+}
+
+func TestExtractToolCallUsesFixJSON(t *testing.T) {
+	// JSON with unescaped newline — fixJSONBytes should repair it
+	tc := extractToolCall(`{"name":"write","arguments":{"file_path":"test.txt","content":"line1
+line2"}}`)
+	if tc == nil {
+		t.Fatal("expected tool call from malformed JSON (unescaped newline)")
+	}
+	if tc.Name != "write" {
+		t.Errorf("expected write, got %s", tc.Name)
+	}
+}

@@ -12,8 +12,10 @@ import (
 
 type SearchTool struct{}
 
-func (t *SearchTool) Name() string        { return "search" }
-func (t *SearchTool) Description() string { return "Search the web for documentation, code references, and APIs. Use when you don't know a function signature or library." }
+func (t *SearchTool) Name() string { return "search" }
+func (t *SearchTool) Description() string {
+	return "Search the web for documentation, code references, and APIs. Use when you don't know a function signature or library."
+}
 func (t *SearchTool) ShortDescription() string { return "Search the web" }
 
 func (t *SearchTool) Schema() any {
@@ -46,7 +48,7 @@ func (t *SearchTool) Execute(ctx ExecContext, input json.RawMessage) (string, er
 		if err2 := json.Unmarshal(input, &raw); err2 != nil {
 			return "", fmt.Errorf("%s", fmtErr("invalid input", `{"query": "golang fmt.Sprintf"}`, input))
 		}
-		in.Query = firstOf(raw, "query", "q", "search", "find")
+		in.Query = firstOf(raw, "query", "q", "search", "find", "question", "topic")
 	}
 	if in.Query == "" {
 		return "", fmt.Errorf("%s", fmtErr("missing \"query\"", `{"query": "golang fmt.Sprintf"}`, input))

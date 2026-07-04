@@ -29,8 +29,10 @@ func runGit(dir string, args ...string) (string, error) {
 
 type CommitTool struct{}
 
-func (t *CommitTool) Name() string        { return "commit" }
-func (t *CommitTool) Description() string { return "Stage all changes and create a git commit. If no message is provided, returns the diff so you can write a commit message." }
+func (t *CommitTool) Name() string { return "commit" }
+func (t *CommitTool) Description() string {
+	return "Stage all changes and create a git commit. If no message is provided, returns the diff so you can write a commit message."
+}
 func (t *CommitTool) ShortDescription() string { return "Git commit with message" }
 
 func (t *CommitTool) Schema() any {
@@ -97,13 +99,15 @@ func (t *CommitTool) Execute(ctx ExecContext, input json.RawMessage) (string, er
 
 type ReviewTool struct{}
 
-func (t *ReviewTool) Name() string        { return "review" }
-func (t *ReviewTool) Description() string { return "Show all uncommitted changes (git diff) for review before committing." }
+func (t *ReviewTool) Name() string { return "review" }
+func (t *ReviewTool) Description() string {
+	return "Show all uncommitted changes (git diff) for review before committing."
+}
 func (t *ReviewTool) ShortDescription() string { return "Review uncommitted changes" }
 
 func (t *ReviewTool) Schema() any {
 	return map[string]any{
-		"type": "object",
+		"type":       "object",
 		"properties": map[string]any{},
 	}
 }
@@ -141,5 +145,3 @@ func (t *ReviewTool) Execute(ctx ExecContext, input json.RawMessage) (string, er
 	b.WriteString("── End ──")
 	return b.String(), nil
 }
-
-

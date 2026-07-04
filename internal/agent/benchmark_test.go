@@ -238,5 +238,3 @@ func BenchmarkLatencyTurnCount(b *testing.B) {
 		})
 	}
 }
-
-

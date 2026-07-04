@@ -12,8 +12,8 @@ func TestMatchProfileExact(t *testing.T) {
 	if !p.MinimalMode {
 		t.Error("expected minimal mode for 0.8b")
 	}
-	if p.Temperature != 0.2 {
-		t.Errorf("expected 0.2, got %f", p.Temperature)
+	if p.Temperature != 0.0 {
+		t.Errorf("expected 0.0, got %f", p.Temperature)
 	}
 }
 
@@ -42,8 +42,8 @@ func TestMatchProfileDefault(t *testing.T) {
 	if p.MaxContext != 24000 {
 		t.Errorf("expected 24000 default, got %d", p.MaxContext)
 	}
-	if p.Temperature != 0.2 {
-		t.Errorf("expected 0.2 default, got %f", p.Temperature)
+	if p.Temperature != 0.0 {
+		t.Errorf("expected 0.0, got %f", p.Temperature)
 	}
 }
 
