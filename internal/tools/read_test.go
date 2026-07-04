@@ -42,13 +42,20 @@ func TestReadExecute(t *testing.T) {
 }
 
 func TestReadExecuteNotFound(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "read-notfound-*")
+	defer os.RemoveAll(tmpDir)
+	os.WriteFile(filepath.Join(tmpDir, "existing.txt"), []byte("content"), 0644)
+
 	tool := &ReadTool{}
 	input, _ := json.Marshal(map[string]any{
 		"file_path": "nonexistent.txt",
 	})
-	_, err := tool.Execute(ExecContext{Context: context.Background()}, input)
-	if err == nil {
-		t.Error("expected error for non-existent file")
+	result, err := tool.Execute(ExecContext{Context: context.Background(), ProjectRoot: tmpDir}, input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "existing.txt") {
+		t.Errorf("expected directory listing to include existing.txt, got %s", result)
 	}
 }
 
