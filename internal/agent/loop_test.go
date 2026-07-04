@@ -108,25 +108,27 @@ func TestAgentToolCallFlow(t *testing.T) {
 	}
 }
 
-func TestAgentStallDetection(t *testing.T) {
+func TestAgentInnerLoopLimit(t *testing.T) {
+	responses := make([]mockResponse, 20)
+	for i := range responses {
+		responses[i] = mockResponse{
+			toolCalls: []llm.ToolCall{{ID: "c", Name: "bash", Arguments: `{"command":"true"}`}},
+		}
+	}
+
 	agent := New(Config{
 		Type: AgentBuild,
 		LLM: &mockLLM{
-			responses: []mockResponse{
-				{toolCalls: []llm.ToolCall{{ID: "c1", Name: "bash", Arguments: `{"command":"true"}`}}},
-				{toolCalls: []llm.ToolCall{{ID: "c2", Name: "bash", Arguments: `{"command":"true"}`}}},
-				{toolCalls: []llm.ToolCall{{ID: "c3", Name: "bash", Arguments: `{"command":"true"}`}}},
-				{toolCalls: []llm.ToolCall{{ID: "c4", Name: "bash", Arguments: `{"command":"true"}`}}},
-			},
+			responses: responses,
 		},
 		Tools:    testRegistry(),
 		Project:  testProfile(t.TempDir()),
-		MaxTurns: 10,
+		MaxTurns: 30,
 	})
 
 	_, err := agent.Run(context.Background(), "do something", nil, nil, nil)
 	if err == nil {
-		t.Error("expected stall error after 3 empty tool calls")
+		t.Error("expected inner loop limit error after 12 iterations")
 	}
 }
 

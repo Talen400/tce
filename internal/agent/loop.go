@@ -144,126 +144,120 @@ func (a *Agent) Run(ctx context.Context, userPrompt string, onToken func(string)
 	}
 
 	turn := 0
-	emptyResults := 0
 	toolErrors := make(map[string]int)
+	fileEditFails := make(map[string]int)
 
+	// Outer loop: each iteration is one user-facing "turn".
+	// Inner loop: each iteration is one LLM call + tool execution round.
+	// The inner loop lets the model self-correct tool errors without
+	// consuming extra user turns.
 	for turn < maxTurns {
 		turn++
 		a.turnCount++
 
-		a.messages = a.compactor.Compact(a.messages)
+		for inner := 0; inner < 12; inner++ {
+			a.messages = a.compactor.Compact(a.messages)
 
-		var streamedContent string
-		var resp *llm.Response
-		var err error
+			var streamedContent string
+			var resp *llm.Response
+			var err error
 
-		// Estimate input tokens
-		for _, m := range a.messages {
-			a.totalInputTokens += estimateTokens(m.Content, a.cfg.TokenRatio)
-		}
+			// Estimate input tokens
+			for _, m := range a.messages {
+				a.totalInputTokens += estimateTokens(m.Content, a.cfg.TokenRatio)
+			}
 
-		if a.cfg.DisableStream {
-			resp, err = a.cfg.LLM.Chat(ctx, a.messages, a.cachedToolDefs)
-			if err == nil {
-				streamedContent = resp.Content
-				a.totalOutputTokens += estimateTokens(resp.Content, a.cfg.TokenRatio)
-				if onToken != nil {
-					onToken(resp.Content)
+			if a.cfg.DisableStream {
+				resp, err = a.cfg.LLM.Chat(ctx, a.messages, a.cachedToolDefs)
+				if err == nil {
+					streamedContent = resp.Content
+					a.totalOutputTokens += estimateTokens(resp.Content, a.cfg.TokenRatio)
+					if onToken != nil {
+						onToken(resp.Content)
+					}
+				}
+			} else {
+				resp, err = a.cfg.LLM.ChatStream(ctx, a.messages, a.cachedToolDefs, func(chunk string) {
+					streamedContent += chunk
+					if onToken != nil {
+						onToken(chunk)
+					}
+				})
+				if err == nil {
+					a.totalOutputTokens += estimateTokens(streamedContent, a.cfg.TokenRatio)
 				}
 			}
-		} else {
-			resp, err = a.cfg.LLM.ChatStream(ctx, a.messages, a.cachedToolDefs, func(chunk string) {
-				streamedContent += chunk
-				if onToken != nil {
-					onToken(chunk)
+			if err != nil {
+				return "", fmt.Errorf("LLM call (turn %d): %w", turn, err)
+			}
+
+			// Verbose: print tool call payloads
+			if a.cfg.Verbose && len(resp.ToolCalls) > 0 {
+				for _, tc := range resp.ToolCalls {
+					fmt.Fprintf(os.Stderr, "[verbose] tool call: %s(%s)\n", tc.Name, tc.Arguments)
 				}
-			})
-			if err == nil {
-				a.totalOutputTokens += estimateTokens(streamedContent, a.cfg.TokenRatio)
-			}
-		}
-		if err != nil {
-			return "", fmt.Errorf("LLM call (turn %d): %w", turn, err)
-		}
-
-		// Verbose: print tool call payloads
-		if a.cfg.Verbose && len(resp.ToolCalls) > 0 {
-			for _, tc := range resp.ToolCalls {
-				fmt.Fprintf(os.Stderr, "[verbose] tool call: %s(%s)\n", tc.Name, tc.Arguments)
-			}
-		}
-
-		if len(resp.ToolCalls) == 0 {
-			if streamedContent == "" {
-				streamedContent = "(no response)"
 			}
 
-			// Retry with reminder if the model attempted JSON but failed format
-			if a.jsonRetries < 1 && looksLikeFailedJSON(streamedContent) {
-				a.jsonRetries++
+			if len(resp.ToolCalls) == 0 {
+				if streamedContent == "" {
+					streamedContent = "(no response)"
+				}
+
+				// Retry with reminder if the model attempted JSON but failed format
+				if a.jsonRetries < 1 && looksLikeFailedJSON(streamedContent) {
+					a.jsonRetries++
+					a.messages = append(a.messages, llm.Message{Role: "assistant", Content: streamedContent})
+					a.messages = append(a.messages, llm.Message{
+						Role: "user",
+						Content: "Your response contained a malformed tool call JSON. " +
+							"Follow this EXACT format with no surrounding text:\n" +
+							`{"name":"tool_name","arguments":{"param":"value"}}`,
+					})
+					continue
+				}
+
+				if turn == 1 && isCodeRequest(userPrompt) {
+					return "", fmt.Errorf("code requests require tool use — implement using write/edit tools, not direct answers")
+				}
+
+				if hasHallucinatedCode(streamedContent) {
+					// Feed inline code back to model instead of aborting — model retries with write tool
+					a.messages = append(a.messages, llm.Message{Role: "assistant", Content: streamedContent})
+					a.messages = append(a.messages, llm.Message{
+						Role:    "user",
+						Content: "You wrote code inline instead of using write/edit. Retry using the write tool with the same content.",
+					})
+					continue
+				}
+
 				a.messages = append(a.messages, llm.Message{Role: "assistant", Content: streamedContent})
-				a.messages = append(a.messages, llm.Message{
-					Role: "user",
-					Content: "Your response contained a malformed tool call JSON. " +
-						"Follow this EXACT format with no surrounding text:\n" +
-						`{"name":"tool_name","arguments":{"param":"value"}}`,
-				})
-				turn-- // don't count this as a full turn
-				continue
+				return streamedContent, nil
 			}
 
-			if turn == 1 && isCodeRequest(userPrompt) {
-				return "", fmt.Errorf("code requests require tool use — implement using write/edit tools, not direct answers")
+			if a.cfg.ForceSingleCall && len(resp.ToolCalls) > 1 {
+				resp.ToolCalls = resp.ToolCalls[:1]
 			}
 
-			if hasHallucinatedCode(streamedContent) {
-				return "", fmt.Errorf("response contains code blocks — use write/edit tools instead of direct code output")
+			// If tool calls were extracted from text (JSON fallback), clear streamed content
+			// to avoid adding raw JSON as assistant content
+			if len(resp.ToolCalls) > 0 && strings.HasPrefix(strings.TrimSpace(streamedContent), "{") && strings.Contains(streamedContent, `"name"`) {
+				streamedContent = ""
 			}
 
-			a.messages = append(a.messages, llm.Message{Role: "assistant", Content: streamedContent})
-			return streamedContent, nil
-		}
+			a.messages = append(a.messages, llm.Message{
+				Role:      "assistant",
+				Content:   streamedContent,
+				ToolCalls: resp.ToolCalls,
+			})
 
-		if a.cfg.ForceSingleCall && len(resp.ToolCalls) > 1 {
-			resp.ToolCalls = resp.ToolCalls[:1]
-		}
+			for _, tc := range resp.ToolCalls {
+				action, msg := a.perm.Check(tc.Name)
 
-		// If tool calls were extracted from text (JSON fallback), clear streamed content
-		// to avoid adding raw JSON as assistant content
-		if len(resp.ToolCalls) > 0 && strings.HasPrefix(strings.TrimSpace(streamedContent), "{") && strings.Contains(streamedContent, `"name"`) {
-			streamedContent = ""
-		}
-
-		a.messages = append(a.messages, llm.Message{
-			Role:      "assistant",
-			Content:   streamedContent,
-			ToolCalls: resp.ToolCalls,
-		})
-
-		hadUsefulResult := false
-		for _, tc := range resp.ToolCalls {
-			action, msg := a.perm.Check(tc.Name)
-
-			if action == permission.Deny {
-				errMsg := fmt.Sprintf("Tool %q denied: %s", tc.Name, msg)
-				if onToolEnd != nil {
-					onToolEnd(tc.Name, errMsg)
-				}
-				a.messages = append(a.messages, llm.Message{
-					Role:       "tool",
-					ToolCallID: tc.ID,
-					Content:    errMsg,
-				})
-				continue
-			}
-
-			if action == permission.Ask {
-				fmt.Printf("\n⚠️  %s (y/N): ", msg)
-				var answer string
-				_, _ = fmt.Scanln(&answer)
-				answer = strings.TrimSpace(strings.ToLower(answer))
-				if answer != "y" && answer != "yes" {
-					errMsg := fmt.Sprintf("User denied tool %q", tc.Name)
+				if action == permission.Deny {
+					errMsg := fmt.Sprintf("Tool %q denied: %s", tc.Name, msg)
+					if onToolEnd != nil {
+						onToolEnd(tc.Name, errMsg)
+					}
 					a.messages = append(a.messages, llm.Message{
 						Role:       "tool",
 						ToolCallID: tc.ID,
@@ -271,66 +265,79 @@ func (a *Agent) Run(ctx context.Context, userPrompt string, onToken func(string)
 					})
 					continue
 				}
-			}
 
-			if onToolStart != nil {
-				onToolStart(tc.Name, tc.Arguments)
-			}
-
-			execCtx := tools.ExecContext{
-				Context:     ctx,
-				ProjectRoot: a.cfg.Project.Root,
-				Stdout:      func(s string) {},
-				Stderr:      func(s string) {},
-				ReadInput:   a.stdinReader(),
-				SubAgent:    a,
-				Depth:       a.depth,
-			}
-
-			result := a.cfg.Tools.Execute(execCtx, tc)
-
-			if onToolEnd != nil {
-				onToolEnd(tc.Name, result)
-			}
-
-			a.messages = append(a.messages, llm.Message{
-				Role:       "tool",
-				ToolCallID: tc.ID,
-				Content:    result,
-			})
-
-			if strings.HasPrefix(result, "Error") {
-				toolErrors[tc.Name]++
-				if toolErrors[tc.Name] >= 5 {
-					return "", fmt.Errorf("tool %q failed %d times consecutively", tc.Name, toolErrors[tc.Name])
+				if action == permission.Ask {
+					fmt.Printf("\n⚠️  %s (y/N): ", msg)
+					var answer string
+					_, _ = fmt.Scanln(&answer)
+					answer = strings.TrimSpace(strings.ToLower(answer))
+					if answer != "y" && answer != "yes" {
+						errMsg := fmt.Sprintf("User denied tool %q", tc.Name)
+						a.messages = append(a.messages, llm.Message{
+							Role:       "tool",
+							ToolCallID: tc.ID,
+							Content:    errMsg,
+						})
+						continue
+					}
 				}
-			} else {
-				toolErrors[tc.Name] = 0
-			}
 
-			if result != "" && !strings.HasPrefix(result, "Error") && !strings.Contains(result, "(no output)") {
-				hadUsefulResult = true
+				if onToolStart != nil {
+					onToolStart(tc.Name, tc.Arguments)
+				}
+
+				execCtx := tools.ExecContext{
+					Context:     ctx,
+					ProjectRoot: a.cfg.Project.Root,
+					Stdout:      func(s string) {},
+					Stderr:      func(s string) {},
+					ReadInput:   a.stdinReader(),
+					SubAgent:    a,
+					Depth:       a.depth,
+				}
+
+				result := a.cfg.Tools.Execute(execCtx, tc)
+
+				if onToolEnd != nil {
+					onToolEnd(tc.Name, result)
+				}
+
+				a.messages = append(a.messages, llm.Message{
+					Role:       "tool",
+					ToolCallID: tc.ID,
+					Content:    result,
+				})
+
+				if strings.HasPrefix(result, "Error") {
+					toolErrors[tc.Name]++
+					if toolErrors[tc.Name] >= 5 {
+						return "", fmt.Errorf("tool %q failed %d times consecutively", tc.Name, toolErrors[tc.Name])
+					}
+				} else {
+					toolErrors[tc.Name] = 0
+				}
+
+				// Auto-read file when edit fails with "old_string not found"
+				if tc.Name == "edit" && strings.Contains(result, "old_string not found in file") {
+					if filePath := extractFilePath(result); filePath != "" {
+						fileEditFails[filePath]++
+						if fileEditFails[filePath] >= 2 {
+							return "", fmt.Errorf("edit failed twice on %s — file state changed. Use read to see current content", filePath)
+						}
+						readResult := a.cfg.Tools.Execute(execCtx, llm.ToolCall{
+							Name:      "read",
+							Arguments: fmt.Sprintf(`{"file_path":"%s"}`, filePath),
+						})
+						a.messages = append(a.messages, llm.Message{
+							Role:    "tool",
+							Content: "❯ auto-read (current state after failed edit):\n" + readResult,
+						})
+					}
+				}
 			}
 		}
 
-		if !hadUsefulResult {
-			hasToolErrors := false
-			for _, count := range toolErrors {
-				if count > 0 {
-					hasToolErrors = true
-					break
-				}
-			}
-			if hasToolErrors {
-				return "", fmt.Errorf("tools are failing — check arguments and available paths")
-			}
-			emptyResults++
-			if emptyResults >= 3 {
-				return "Task stalled: repeated tool calls with no useful output. Please rephrase your request or check the available tools.", fmt.Errorf("stalled after %d empty tool calls", emptyResults)
-			}
-		} else {
-			emptyResults = 0
-		}
+		return "", fmt.Errorf("tool call loop exceeded %d iterations — model may be stuck in a loop", 12)
 	}
 
 	return "", fmt.Errorf("reached maximum turns (%d) without completing", maxTurns)
@@ -484,6 +491,16 @@ func looksLikeFailedJSON(text string) bool {
 
 // stdinReader returns a ReadInput function for tools that need user interaction
 // (ask, edit confirmation, bash workdir check). Reads from a.cfg.Stdin (set to os.Stdin in main.go).
+// extractFilePath parses the file path from an edit tool error like
+// "old_string not found in file /abs/path/file.c"
+func extractFilePath(errMsg string) string {
+	prefix := "old_string not found in file "
+	if idx := strings.Index(errMsg, prefix); idx >= 0 {
+		return strings.TrimSpace(errMsg[idx+len(prefix):])
+	}
+	return ""
+}
+
 func (a *Agent) stdinReader() func(string) (string, error) {
 	return func(question string) (string, error) {
 		if a.cfg.Stdin == nil {
