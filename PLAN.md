@@ -32,10 +32,10 @@
 ## Fase 2 — Experiência do usuário
 
 - [x] Streaming de respostas do modelo no terminal (token a token)
-- [ ] Persistência de sessão (`.tce/sessions/*.json`) com `tce --resume`
-- [ ] Arquivo de configuração por projeto (`.tce.yaml`): modelo padrão, agente padrão, diretórios ignorados
-- [ ] Contagem de tokens e custo estimado por sessão (exibido ao final da execução)
-- [ ] Modo verboso/debug (`--verbose`) mostrando payloads de tool calls
+- [x] Persistência de sessão (`.tce/sessions/*.json`) com `tce --resume`
+- [x] Arquivo de configuração por projeto (`.tce.yaml`): modelo padrão, agente padrão, verbose
+- [x] Contagem de tokens e custo estimado por sessão (exibido ao final da execução)
+- [x] Modo verboso/debug (`--verbose`) mostrando payloads de tool calls
 
 ## Fase 3 — Integração com git
 
