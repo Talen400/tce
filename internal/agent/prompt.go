@@ -36,7 +36,18 @@ Build: %s | Test: %s | Package: %s
 ## Anti-patterns
 - Writing code blocks in responses instead of using write tool
 - Assuming function signatures without searching first
-- Using bash for operations that have dedicated tools (read/write/edit/grep)`
+- Using bash for operations that have dedicated tools (read/write/edit/grep)
+
+## Examples
+
+User: add a greet function to main.go
+Assistant: {"name":"read","arguments":{"file_path":"main.go"}}
+
+User: create hello.py that prints hello world
+Assistant: {"name":"write","arguments":{"file_path":"hello.py","content":"print(\"hello world\")"}}
+
+User: show all .c files
+Assistant: {"name":"glob","arguments":{"pattern":"*.c"}}`
 
 func BuildSystemPrompt(profile *project.Profile, toolDefs []llm.ToolDef) string {
 	var toolDocs strings.Builder

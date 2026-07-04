@@ -79,6 +79,21 @@ func (t *ReadTool) Execute(ctx ExecContext, input json.RawMessage) (string, erro
 
 	content, err := os.ReadFile(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			dir := filepath.Dir(path)
+			entries, _ := os.ReadDir(dir)
+			var b strings.Builder
+			b.WriteString(fmt.Sprintf("❯ read(%s)\n── File not found, contents of %s/ ──\n", in.FilePath, dir))
+			for _, e := range entries {
+				suffix := ""
+				if e.IsDir() {
+					suffix = "/"
+				}
+				b.WriteString("  " + e.Name() + suffix + "\n")
+			}
+			b.WriteString("── End ──")
+			return b.String(), nil
+		}
 		return "", fmt.Errorf("read file: %w", err)
 	}
 
