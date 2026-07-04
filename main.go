@@ -179,6 +179,7 @@ func main() {
 		LLM:             llmClient,
 		Tools:           toolReg,
 		Project:         profile,
+		Stdin:           os.Stdin,
 		MaxTurns:        modelProfile.MaxTurns,
 		MinimalMode:     showMinimal,
 		MaxContext:      maxCtx,

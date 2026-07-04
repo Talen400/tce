@@ -1,8 +1,10 @@
 package agent
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -51,6 +53,7 @@ type Config struct {
 	LLM             LLMClient
 	Tools           *tools.Registry
 	Project         *project.Profile
+	Stdin           io.Reader
 	MaxTurns        int
 	MinimalMode     bool
 	MaxContext      int
@@ -279,6 +282,7 @@ func (a *Agent) Run(ctx context.Context, userPrompt string, onToken func(string)
 				ProjectRoot: a.cfg.Project.Root,
 				Stdout:      func(s string) {},
 				Stderr:      func(s string) {},
+				ReadInput:   a.stdinReader(),
 				SubAgent:    a,
 				Depth:       a.depth,
 			}
@@ -362,6 +366,7 @@ func (a *Agent) RunSubAgent(ctx context.Context, agentType string, prompt string
 		LLM:        a.cfg.LLM,
 		Tools:      a.cfg.Tools,
 		Project:    a.cfg.Project,
+		Stdin:      a.cfg.Stdin,
 		MaxTurns:   15,
 		MaxContext: a.cfg.MaxContext,
 	}
@@ -477,6 +482,23 @@ func looksLikeFailedJSON(text string) bool {
 		strings.Contains(lower, "```json")
 }
 
+// stdinReader returns a ReadInput function for tools that need user interaction
+// (ask, edit confirmation, bash workdir check). Reads from a.cfg.Stdin (set to os.Stdin in main.go).
+func (a *Agent) stdinReader() func(string) (string, error) {
+	return func(question string) (string, error) {
+		if a.cfg.Stdin == nil {
+			return "", fmt.Errorf("no stdin available")
+		}
+		fmt.Fprint(os.Stderr, "\n❓ "+question+"\n> ")
+		reader := bufio.NewReader(a.cfg.Stdin)
+		answer, err := reader.ReadString('\n')
+		if err != nil {
+			return "", fmt.Errorf("read input: %w", err)
+		}
+		return strings.TrimSpace(answer), nil
+	}
+}
+
 func (a *Agent) autoBootstrap(ctx context.Context) {
 	root := a.cfg.Project.Root
 	if root == "" {
@@ -518,6 +540,7 @@ func (a *Agent) autoBootstrap(ctx context.Context) {
 		ProjectRoot: root,
 		Stdout:      func(s string) {},
 		Stderr:      func(s string) {},
+		ReadInput:   a.stdinReader(),
 		SubAgent:    a,
 		Depth:       a.depth,
 	}
