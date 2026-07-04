@@ -187,3 +187,40 @@
 - Homebrew formula checksum must be updated per-release — automated with CI or goreleaser
 - The `-ldflags="-s -w -X main.version=X"` strips debug info and injects version at build time
 - A Homebrew tap needs a separate repo (`homebrew-tce`) with the formula placed at `Formula/tce.rb`
+
+---
+
+## 2026-07-03 — Phase 6: Qualidade contínua
+
+**Feito:**
+- Created 4 E2E integration tests in `internal/agent/integration_test.go`:
+  - `TestE2EHttpMockServer`: full agent loop with real HTTP mock (httptest), verifies tool execution via network
+  - `TestE2EStreamingHttpMock`: streaming mode with SSE mock server
+  - `TestE2EMultiToolCall`: multiple parallel tool calls in a single turn
+  - `TestE2EFileReadWrite`: real file read/write through the agent and mock LLM
+  - Mock server handles both streaming and non-streaming via `stream` field in request body
+  - Returns proper OpenAI-compatible JSON/SSE responses with usage stats
+- Created 7 benchmark tests in `internal/agent/benchmark_test.go`:
+  - `BenchmarkLatencyReadTool`: single read tool (file I/O latency)
+  - `BenchmarkLatencyMultiTool`: multiple tool sequence (read, grep, write)
+  - `BenchmarkLatencyWriteTool`: file write latency
+  - `BenchmarkLatencyBashTool`: shell command execution latency
+  - `BenchmarkLatencySearchTool`: web search via DuckDuckGo (network-bound)
+  - `BenchmarkLatencyHighConcurrency`: parallel sessions via `b.RunParallel`
+  - `BenchmarkLatencyTurnCount`: latency scaling from 5 to 25 turns
+- Created telemetry package in `internal/telemetry/telemetry.go`:
+  - `Reporter` with opt-in (`enabled` flag)
+  - Records errors to `.tce/errors.jsonl` (JSON Lines format)
+  - Fields: timestamp, tool name, error message, turn, model, agent, version
+  - `Report()` for tool errors, `ReportGeneral()` for LLM/other failures
+  - `LoadReports()` / `ClearReports()` / `ReportCount()` for inspection
+  - Error messages truncated to 500 chars
+  - Thread-safe with mutex
+- Fixed `BenchmarkAgentSearchWriteFlow` (pre-existing): used `.go` instead of `.c` to avoid search tool network dependency
+
+**Aprendizado:**
+- The LLM client doesn't set `Accept: text/event-stream` — it sends a standard request and lets the server detect streaming via `"stream": true` in the request body
+- OpenAI API tool_calls format: non-streaming uses `choices[0].message.tool_calls`, streaming uses `choices[0].delta.tool_calls`
+- `benchtime=1x` is useful to verify benchmarks compile and run without waiting for statistical sampling
+- The agent loop's stall detection considers `hadUsefulResult` per-turn: if ANY tool in a turn returns non-error, non-empty output, the turn is productive. Only when ALL tool results are errors/empty is it a stall.
+- `b.RunParallel` creates a new agent per goroutine — each needs its own mockLLM with fresh response slice (copy, not reference)

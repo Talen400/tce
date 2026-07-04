@@ -58,9 +58,9 @@
 
 ## Fase 6 — Qualidade contínua
 
-- [ ] Testes de integração end-to-end (simulando sessão real com mock de API)
-- [ ] Benchmark de latência por provedor (Ollama local vs APIs remotas)
-- [ ] Telemetria opcional (opt-in) de erros para priorizar correções
+- [x] Testes de integração end-to-end (simulando sessão real com mock de API)
+- [x] Benchmark de latência por provedor (Ollama local vs APIs remotas)
+- [x] Telemetria opcional (opt-in) de erros para priorizar correções
 
 ## Fase 7 — Documentação e acompanhamento de estudo
 

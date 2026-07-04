@@ -271,20 +271,23 @@ func TestIsCodeRequestGreeting(t *testing.T) {
 }
 
 func TestIsCodeRequestFtPrefix(t *testing.T) {
-	if !isCodeRequest("ft_printf") {
-		t.Error("expected true for 'ft_printf'")
+	if isCodeRequest("ft_printf") {
+		t.Error("expected false for 'ft_printf' — ft_ prefix is not a code request")
 	}
-	if !isCodeRequest("explique ft_printf") {
-		t.Error("expected true for 'explique ft_printf'")
+	if isCodeRequest("search to me ft_printf") {
+		t.Error("expected false for 'search to me ft_printf' — search requests are not code")
 	}
 }
 
 func TestHasHallucinatedCodeBlocks(t *testing.T) {
-	if !hasHallucinatedCode("Here's the code:\n```c\nint main() {}\n```") {
+	if !hasHallucinatedCode("Here's the code:\n```c\nint main() {\n    printf(\"hello\");\n    return 0;\n}\n```") {
 		t.Error("expected true for code block without write tool")
 	}
-	if !hasHallucinatedCode("```go\nfunc main() {}\n```") {
+	if !hasHallucinatedCode("```go\npackage main\n\nfunc main() {\n    fmt.Println(\"hello\")\n}\n```") {
 		t.Error("expected true for go code block")
+	}
+	if hasHallucinatedCode("A single ```c line``` in text") {
+		t.Error("expected false for inline code reference")
 	}
 }
 
@@ -303,13 +306,33 @@ func TestHasHallucinatedCodeClean(t *testing.T) {
 	}
 }
 
+func TestLooksLikeFailedJSON(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{`{"name":"read","arguments":{}}`, true},
+		{`{ 'name' : 'bash' }`, true},
+		{"<tool_call>content</tool_call>", true},
+		{"```json\n{\"name\":\"x\"}\n```", true},
+		{"Hello, how can I help you today?", false},
+		{"I'll search for that information.", false},
+	}
+	for _, tt := range tests {
+		if got := looksLikeFailedJSON(tt.input); got != tt.want {
+			t.Errorf("looksLikeFailedJSON(%q) = %v, want %v", tt.input, got, tt.want)
+		}
+	}
+}
+
 func BenchmarkAgentSearchWriteFlow(b *testing.B) {
 	tmpDir := b.TempDir()
+	os.WriteFile(tmpDir+"/main.go", []byte("package main\nfunc main() {\n\tprintln(\"hello\")\n}\n"), 0644)
 
 	responses := make([]mockResponse, 4)
-	responses[0] = mockResponse{toolCalls: []llm.ToolCall{{ID: "s1", Name: "search", Arguments: `{"query":"printf C"}`}}}
-	responses[1] = mockResponse{toolCalls: []llm.ToolCall{{ID: "g1", Name: "glob", Arguments: `{"pattern":"*.c"}`}}}
-	responses[2] = mockResponse{toolCalls: []llm.ToolCall{{ID: "r1", Name: "read", Arguments: `{"file_path":"main.c"}`}}}
+	responses[0] = mockResponse{toolCalls: []llm.ToolCall{{ID: "g1", Name: "glob", Arguments: `{"pattern":"*.go"}`}}}
+	responses[1] = mockResponse{toolCalls: []llm.ToolCall{{ID: "r1", Name: "read", Arguments: `{"file_path":"main.go"}`}}}
+	responses[2] = mockResponse{toolCalls: []llm.ToolCall{{ID: "b1", Name: "bash", Arguments: `{"command":"echo ok"}`}}}
 	responses[3] = mockResponse{content: "Done"}
 
 	agent := New(Config{
@@ -320,7 +343,6 @@ func BenchmarkAgentSearchWriteFlow(b *testing.B) {
 		MaxTurns: 5,
 	})
 
-	agent.Reset()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		agent.Reset()
