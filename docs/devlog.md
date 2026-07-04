@@ -283,3 +283,36 @@ flowchart LR
 - A glossary written during development captures context that would be forgotten weeks later (e.g., why `ForceSingleCall` exists, what `tryFixJSON` does)
 - Flashcards in Q&A format are more useful for review than prose summaries — they test recall rather than just recognition
 - The most valuable code comments explain WHY (referencing an ADR) rather than WHAT (which is already in the code or function name)
+
+---
+
+## 2026-07-04 — Pós-Phase 7: Correções e melhorias estruturais
+
+**Feito (1ª rodada — lint + bugs):**
+- Corrigidos **23 erros de golangci-lint** em 12 arquivos:
+  - `errcheck`: 9 chamadas sem tratamento de erro (Close, os.Remove, etc.)
+  - `staticcheck`: 3 variáveis não utilizadas, 1 conversão desnecessária, 1 SA9004 (grupo ausente)
+  - `unused`: 2 funções `formatJSON` e `wrapLines` removidas
+  - `gosimple`: 1 `if-else` → switch, 1 strings.Replace → ReplaceAll, 1 reduntante `== false`
+  - `ineffassign`: 1 `\n` atribuído mas nunca usado
+  - `gofmt`: 2 arquivos mal formatados
+- **ReadInput finalmente funcional** — o campo `Stdin io.Reader` foi adicionado ao `agent.Config`, e o loop só então o conectou via `a.stdinReader()`. A ferramenta `ask`, a confirmação de edição e a verificação de diretório do bash passaram a funcionar.
+- **Read file not found** — agora lista o conteúdo do diretório quando o arquivo não existe, ajudando o modelo a corrigir o path.
+- **Few-shot examples** — 3 exemplos (read, write, glob) adicionados ao system prompt para melhorar call de ferramentas.
+
+**Feito (2ª rodada — mudanças estruturais):**
+- **Inner Retry Loop** (cap 12): substitui o antigo stall detection (que abortava após 3 tool calls vazias). Agora o loop principal tem um sub-loop interno de até 12 iterações LLM→tool. Se o modelo erra um argumento, recebe o erro como `tool_result` e pode tentar de novo no mesmo turno. Mais previsível e produtivo.
+- **Edit append mode**: quando `old_string` é vazio, o conteúdo é anexado ao final do arquivo — sem diff, sem confirmação, com undo.
+- **Code block detection**: quando o modelo "alucina" código em markdown em vez de usar a ferramenta write, o bloco é detectado e enviado como feedback, sem abortar.
+- **Auto-read on edit fail**: se `old_string` não for encontrado, extrai o file_path, lê o arquivo automaticamente e alimenta o resultado como mensagem de ferramenta. O modelo pode tentar de novo.
+- **Repeated file failure detection**: 2× `old_string not found` no mesmo arquivo → aborta com mensagem acionável.
+- **Build file protection**: Makefile, CMakeLists.txt, Dockerfile, package.json, go.mod, Cargo.toml, pom.xml, build.gradle exigem confirmação via ReadInput antes de editar.
+- **Backup messaging**: resultados de write/edit agora incluem "(backup saved — use 'undo' to revert)".
+
+**Aprendizado:**
+- O antigo stall detection só contava "resultados vazios" — mas qualquer erro de parsing já produzia um resultado vazio, então 3 erros consecutivos matavam o agente. O inner loop (cap 12) é mais robusto: erros viram feedback.
+- `bufio.NewReader` criado por chamada de `ReadInput` é seguro mas descarta o buffer — aceitável para leituras pontuais.
+- Auto-read resolve o problema clássico de "edit from memory" — o modelo tenta editar baseado no que ele acha que está no arquivo, em vez de ler primeiro.
+- A proteção de build files é um seguro de custo quase zero — só funciona em modo CLI (TUI não tem stdin no v1).
+- `tryFixJSON` + inner loop = o modelo pode errar JSON, receber o erro de parsing, e tentar corrigir no mesmo turno. Antes o erro de parsing era fatal para o turno.
+- A mudança de stall detection (3 vazios) para inner loop (12 iterações) é semanticamente equivalente mas mais tolerante: erros de parsing, JSON malformado, tool call errada viram feedback em vez de aborto.

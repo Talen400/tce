@@ -1,7 +1,7 @@
 # TCE — Roadmap
 
 > Projeto: `github.com/talen/tce`
-> Atualizado em: 2026-07-03
+> Atualizado em: 2026-07-04
 
 ---
 
@@ -115,6 +115,14 @@
 - [x] Configuração Parametrizada por Modelo — `MatchProfile()` por nome exato > prefixo > fallback
 - [x] Forçar 1 Tool Call (ForceSingleCall) — para perfis que não suportam paralelo
 - [x] Recovery de Erros Consecutivos — tool desabilitada após N falhas seguidas
+- [x] Inner Retry Loop (cap 12) — substitui stall detection, permite auto-correção dentro do mesmo turno
+- [x] Auto-read on edit fail — quando old_string não é encontrado, lê o arquivo automaticamente e realimenta o modelo
+- [x] Repeated File Failure Detection — aborta após 2× old_string not found no mesmo arquivo
+- [x] Append Mode — edit com old_string vazio faz append ao final do arquivo (sem diff/confirmação)
+- [x] Build File Protection — Makefile, CMakeLists.txt, Dockerfile etc. exigem confirmação via ReadInput
+- [x] Backup Messaging — resultados de write/edit incluem "(backup saved — use 'undo' to revert)"
+- [x] Read file not found — lista diretório quando arquivo não existe (ajuda o modelo a achar o path correto)
+- [x] Few-shot Examples — adicionados exemplos de uso (read, write, glob) no system prompt
 
 ---
 
