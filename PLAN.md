@@ -100,6 +100,10 @@
 - [x] Context Cancellation no TUI (Ctrl+C)
 - [x] TUI: `/clear` Command
 - [x] TUI: Limitar Histórico do Viewport (5000 linhas)
+- [x] TUI: Spinner + tool name na status bar durante tool calls
+- [x] TUI: Syntax highlighting em diffs (+ verde, - vermelho, @@ azul)
+- [x] TUI+CLI: `/git` command (branch atual + status)
+- [x] CLI: `--output text|json|silent` para controlar formato da resposta
 
 ### Melhorias Implementadas (fora do plano original)
 

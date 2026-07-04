@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 	"sync"
 
@@ -57,6 +58,9 @@ type Model struct {
 
 	content strings.Builder
 	mu      sync.Mutex
+
+	currentToolName string
+	currentToolArgs string
 }
 
 const maxViewportLines = 5000
@@ -84,6 +88,11 @@ var (
 			Foreground(lipgloss.Color("240"))
 
 	styleContent = lipgloss.NewStyle()
+
+	styleDiffAdd = lipgloss.NewStyle().Foreground(lipgloss.Color("83"))
+	styleDiffDel = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+	styleDiffHdr = lipgloss.NewStyle().Foreground(lipgloss.Color("45"))
+	styleCode    = lipgloss.NewStyle().Foreground(lipgloss.Color("248"))
 )
 
 func NewModel(profile *project.Profile, agentCfg agent.Config) Model {
@@ -141,6 +150,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case toolStartMsg:
+		m.currentToolName = msg.name
+		m.currentToolArgs = msg.args
 		line := fmt.Sprintf("\n\n  %s %s(%s)\n",
 			styleToolCall.Render("🔧"),
 			msg.name,
@@ -152,6 +163,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case toolEndMsg:
+		m.currentToolName = ""
+		m.currentToolArgs = ""
 		prefix := styleToolResult.Render("✅")
 		if strings.HasPrefix(msg.result, "Error") {
 			prefix = styleError.Render("❌")
@@ -164,6 +177,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case agentDoneMsg:
+		m.currentToolName = ""
+		m.currentToolArgs = ""
 		m.mu.Lock()
 		if msg.err != nil {
 			m.content.WriteString(fmt.Sprintf("\n  %s Error: %v\n", styleError.Render("❌"), msg.err))
@@ -193,8 +208,50 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) syncViewport() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.viewport.SetContent(m.content.String())
+	m.viewport.SetContent(highlightContent(m.content.String()))
 	m.viewport.GotoBottom()
+}
+
+func highlightContent(s string) string {
+	var b strings.Builder
+	lines := strings.Split(s, "\n")
+	inCodeBlock := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") {
+			inCodeBlock = !inCodeBlock
+			b.WriteString(styleCode.Render(line))
+			b.WriteString("\n")
+			continue
+		}
+		if inCodeBlock {
+			b.WriteString(styleCode.Render(line))
+			b.WriteString("\n")
+			continue
+		}
+		// Diff highlighting
+		if len(line) > 0 {
+			first := line[0]
+			if first == '+' && !strings.HasPrefix(line, "+++") {
+				b.WriteString(styleDiffAdd.Render(line))
+				b.WriteString("\n")
+				continue
+			}
+			if first == '-' && !strings.HasPrefix(line, "---") {
+				b.WriteString(styleDiffDel.Render(line))
+				b.WriteString("\n")
+				continue
+			}
+			if strings.HasPrefix(line, "@@") {
+				b.WriteString(styleDiffHdr.Render(line))
+				b.WriteString("\n")
+				continue
+			}
+		}
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+	return b.String()
 }
 
 func (m *Model) trimContent() {
@@ -220,6 +277,8 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyCtrlC:
 		if m.state == stateRunning && m.cancel != nil {
 			m.cancel()
+			m.currentToolName = ""
+			m.currentToolArgs = ""
 			m.mu.Lock()
 			m.content.WriteString(fmt.Sprintf("\n  %s Canceled\n", styleError.Render("✗")))
 			m.mu.Unlock()
@@ -252,8 +311,15 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.mu.Unlock()
 					m.viewport.SetContent("")
 					return m, nil
+				case "/git":
+					out := gitStatus()
+					m.mu.Lock()
+					m.content.WriteString(out)
+					m.mu.Unlock()
+					m.syncViewport()
+					return m, nil
 				default:
-					help := styleUser.Render("Commands: /exit  /clear\n")
+					help := styleUser.Render("Commands: /exit  /clear  /git\n")
 					m.mu.Lock()
 					m.content.WriteString(help)
 					m.mu.Unlock()
@@ -284,6 +350,58 @@ func (m *Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+}
+
+func gitStatus() string {
+	out, err := runCmd("git", "branch", "--show-current")
+	if err != nil {
+		return styleError.Render("Not a git repository.\n")
+	}
+	branch := strings.TrimSpace(out)
+
+	status, _ := runCmd("git", "status", "--short")
+	status = strings.TrimSpace(status)
+
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("\n%s\n", styleSeparator.Render("── git ──")))
+	b.WriteString(fmt.Sprintf("  %s Branch: %s\n", styleToolCall.Render("🌿"), branch))
+
+	if status == "" {
+		b.WriteString(fmt.Sprintf("  %s Clean working tree\n\n", styleToolResult.Render("✓")))
+	} else {
+		lines := strings.Split(status, "\n")
+		for _, line := range lines {
+			if len(line) < 3 {
+				continue
+			}
+			prefix := line[:2]
+			path := strings.TrimSpace(line[2:])
+			switch {
+			case strings.HasPrefix(prefix, "??"):
+				b.WriteString(fmt.Sprintf("    %s %s\n", styleDiffAdd.Render("?"), path))
+			case strings.HasPrefix(prefix, "M "):
+				b.WriteString(fmt.Sprintf("    %s %s\n", styleDiffAdd.Render("M"), path))
+			case strings.HasPrefix(prefix, " M"):
+				b.WriteString(fmt.Sprintf("    %s %s\n", styleDiffDel.Render("m"), path))
+			case strings.HasPrefix(prefix, "A "):
+				b.WriteString(fmt.Sprintf("    %s %s\n", styleDiffAdd.Render("A"), path))
+			case strings.HasPrefix(prefix, "D "):
+				b.WriteString(fmt.Sprintf("    %s %s\n", styleDiffDel.Render("D"), path))
+			default:
+				b.WriteString(fmt.Sprintf("    %s %s\n", styleSeparator.Render(prefix), path))
+			}
+		}
+	}
+	b.WriteString(styleSeparator.Render("──────────\n"))
+	return b.String()
+}
+
+func runCmd(name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	var stdout strings.Builder
+	cmd.Stdout = &stdout
+	err := cmd.Run()
+	return stdout.String(), err
 }
 
 func (m *Model) runAgent(prompt string) {
@@ -322,7 +440,7 @@ func (m *Model) View() string {
 
 	running := ""
 	if m.state == stateRunning {
-		running = fmt.Sprintf(" %s running", m.spinner.View())
+		running = fmt.Sprintf(" %s %s", m.spinner.View(), m.currentToolName)
 	}
 
 	statusText := fmt.Sprintf(" tce  %s  %s  %s%s",

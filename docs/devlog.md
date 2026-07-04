@@ -121,3 +121,31 @@
 - MCP Content-Length framing requires careful buffering with `bufio.Reader`
 - YAML block parsing is deceptively tricky; indent-aware line scanning works for the subset we need
 - MCP tool schemas map naturally to the existing `Tool` interface
+
+---
+
+## 2026-07-03 — Phase 5: TUI/CLI
+
+**Feito:**
+- TUI spinner: status bar now shows animated spinner + current tool name during execution
+  - Tracks `currentToolName`/`currentToolArgs` in Model, clears on tool end / agent done
+- TUI diff syntax highlighting via `highlightContent()`:
+  - Lines starting with `+` → green (`styleDiffAdd`)
+  - Lines starting with `-` → red (`styleDiffDel`)
+  - Lines starting with `@@` → cyan (`styleDiffHdr`)
+  - Code blocks (``` ... ```) → subtle gray (`styleCode`)
+  - Applied in `syncViewport()` before setting viewport content
+- CLI `/git` command: shows current branch and `git status --short`
+  - Color-coded status indicators (? for untracked, M/m for staged/unstaged)
+  - Available in both TUI and CLI modes
+- CLI `--output` flag (`text`/`json`/`silent`):
+  - `json`: returns result as JSON with result, error, tools, elapsed fields
+  - `silent`: runs without prompts/output (for automation), only stderr on error
+  - `text` (default): normal interactive mode
+- Updated `/help` to include `/git` command
+
+**Aprendizado:**
+- Bubble Tea viewport content must be styled before `SetContent()` — storing plain text and applying styles at render time keeps the content buffer clean
+- `strings.Cut("tools:", ":")` returns `("tools", "", true)` — need to check if trimmed val is empty AND if next line is indented to detect YAML blocks
+- `tea.ExecCommand` doesn't exist in Bubble Tea — use `os/exec.Command` for standalone commands outside the Bubble Tea event loop
+- Method value vs function: Go allows `cfg.parseTopLevel` as a function value (no `&` needed), but `func() { cfg.parseTopLevel(...) }` closure is also needed in some contexts

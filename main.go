@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"context"
 	"flag"
@@ -39,6 +40,7 @@ func main() {
 	verbose := flag.Bool("verbose", false, "Show detailed tool call payloads")
 	resume := flag.String("resume", "", "Resume a previous session from .tce/sessions/ file")
 	branch := flag.String("branch", "", "Create and switch to a new git branch before starting")
+	output := flag.String("output", "text", "Output format: text, json, silent")
 	flag.Parse()
 
 	if *showVersion {
@@ -224,9 +226,9 @@ func main() {
 	}
 
 	if *cliMode {
-		runCLI(ctx, ag, profile, at, llmClient.ModelName())
+		runCLI(ctx, ag, profile, at, llmClient.ModelName(), *output)
 		turns, tokIn, tokOut := ag.Stats()
-		if turns > 1 {
+		if turns > 1 && *output != "silent" {
 			fmt.Printf("\n📊 Session: %d turns, ~%d tokens in, ~%d tokens out\n", turns, tokIn, tokOut)
 			session.Save(profile.Root, llmClient.ModelName(), turns, tokIn, tokOut, ag.GetMessages())
 		}
@@ -240,14 +242,18 @@ func main() {
 	}
 }
 
-func runCLI(ctx context.Context, ag *agent.Agent, profile *project.Profile, agentType agent.AgentType, modelName string) {
+func runCLI(ctx context.Context, ag *agent.Agent, profile *project.Profile, agentType agent.AgentType, modelName string, output string) {
 	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Printf("tce v%s\n", version)
-	fmt.Printf("Project: %s  Agent: %s  Model: %s\n\n", profile.Summary(), agentType, modelName)
-	fmt.Println("Commands: /help, /exit, /clear, /project | Type your prompt:")
+	if output != "silent" {
+		fmt.Printf("tce v%s\n", version)
+		fmt.Printf("Project: %s  Agent: %s  Model: %s\n\n", profile.Summary(), agentType, modelName)
+		fmt.Println("Commands: /help, /exit, /clear, /project, /git | Type your prompt:")
+	}
 
 	for {
-		fmt.Print("> ")
+		if output != "silent" {
+			fmt.Print("> ")
+		}
 		if !scanner.Scan() {
 			break
 		}
@@ -262,13 +268,37 @@ func runCLI(ctx context.Context, ag *agent.Agent, profile *project.Profile, agen
 			return
 		case input == "/clear":
 			ag.Reset()
-			fmt.Print("\033[H\033[2J")
+			if output != "silent" {
+				fmt.Print("\033[H\033[2J")
+			}
 			continue
 		case input == "/help":
-			fmt.Println("Commands: /exit, /clear, /project")
+			if output != "silent" {
+				fmt.Println("Commands: /exit, /clear, /project, /git")
+			}
 			continue
 		case input == "/project":
-			fmt.Println(profile.String())
+			if output != "silent" {
+				fmt.Println(profile.String())
+			}
+			continue
+		case input == "/git" || strings.HasPrefix(input, "/git "):
+			gitInfo := gitStatus(profile.Root)
+			if output == "json" {
+				fmt.Println(gitJSON(profile.Root))
+			} else if output != "silent" {
+				fmt.Print(gitInfo)
+			}
+			continue
+		}
+
+		if output == "silent" {
+			turnCtx, turnCancel := context.WithCancel(ctx)
+			_, err := ag.Run(turnCtx, input, nil, nil, nil)
+			turnCancel()
+			if err != nil && !errors.Is(err, context.Canceled) {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			}
 			continue
 		}
 
@@ -298,6 +328,18 @@ func runCLI(ctx context.Context, ag *agent.Agent, profile *project.Profile, agen
 			return
 		}
 
+		if output == "json" {
+			jsonOut := map[string]any{
+				"result":  result,
+				"error":   errToString(err),
+				"tools":   lastTool,
+				"elapsed": time.Since(start).String(),
+			}
+			data, _ := json.Marshal(jsonOut)
+			fmt.Println(string(data))
+			continue
+		}
+
 		if err != nil {
 			if result != "" {
 				fmt.Println(result)
@@ -314,6 +356,54 @@ func runCLI(ctx context.Context, ag *agent.Agent, profile *project.Profile, agen
 
 		fmt.Printf("(completed in %s)\n", time.Since(start).Round(time.Millisecond))
 	}
+}
+
+func gitStatus(root string) string {
+	branch, err := exec.Command("git", "-C", root, "branch", "--show-current").Output()
+	if err != nil {
+		return "Not a git repository.\n"
+	}
+	status, _ := exec.Command("git", "-C", root, "status", "--short").Output()
+	branchStr := strings.TrimSpace(string(branch))
+	statusStr := strings.TrimSpace(string(status))
+
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("── git ──\n"))
+	b.WriteString(fmt.Sprintf("  🌿 Branch: %s\n", branchStr))
+	if statusStr == "" {
+		b.WriteString(fmt.Sprintf("  ✓ Clean working tree\n"))
+	} else {
+		for _, line := range strings.Split(statusStr, "\n") {
+			b.WriteString(fmt.Sprintf("    %s\n", line))
+		}
+	}
+	return b.String()
+}
+
+func gitJSON(root string) string {
+	branch, _ := exec.Command("git", "-C", root, "branch", "--show-current").Output()
+	status, _ := exec.Command("git", "-C", root, "status", "--porcelain").Output()
+	statusStr := strings.TrimSpace(string(status))
+	var files []string
+	if statusStr != "" {
+		for _, line := range strings.Split(statusStr, "\n") {
+			files = append(files, line)
+		}
+	}
+	out := map[string]any{
+		"branch": strings.TrimSpace(string(branch)),
+		"files":  files,
+		"dirty":  len(files) > 0,
+	}
+	data, _ := json.Marshal(out)
+	return string(data)
+}
+
+func errToString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 func truncate(s string, n int) string {
