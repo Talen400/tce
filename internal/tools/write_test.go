@@ -117,10 +117,29 @@ func TestEditExecuteNotFound(t *testing.T) {
 	}
 }
 
-func TestEditExecuteEmptyOldString(t *testing.T) {
+func TestEditExecuteAppend(t *testing.T) {
+	tmpDir, _ := os.MkdirTemp("", "edit-append-*")
+	defer os.RemoveAll(tmpDir)
+
+	origPath := filepath.Join(tmpDir, "append.txt")
+	os.WriteFile(origPath, []byte("line1\nline2\n"), 0644)
+
 	tool := &EditTool{}
-	_, err := tool.Execute(ExecContext{}, json.RawMessage(`{"file_path":"x","old_string":"","new_string":"y"}`))
-	if err == nil {
-		t.Error("expected error for empty old_string")
+	input, _ := json.Marshal(map[string]any{
+		"file_path":  "append.txt",
+		"old_string": "",
+		"new_string": "line3",
+	})
+	result, err := tool.Execute(ExecContext{Context: context.Background(), ProjectRoot: tmpDir}, input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == "" {
+		t.Error("expected non-empty result")
+	}
+
+	data, _ := os.ReadFile(origPath)
+	if string(data) != "line1\nline2\nline3" {
+		t.Errorf("expected 'line1\\nline2\\nline3', got %q", string(data))
 	}
 }

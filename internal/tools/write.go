@@ -79,7 +79,7 @@ func (t *WriteTool) Execute(ctx ExecContext, input json.RawMessage) (string, err
 
 	rel, _ := filepath.Rel(ctx.ProjectRoot, path)
 	lines := strings.Count(in.Content, "\n") + 1
-	return fmt.Sprintf("❯ write(%s)\n── Written %d lines ──", rel, lines), nil
+	return fmt.Sprintf("❯ write(%s)\n── Written %d lines ──\n(backup saved — use 'undo' to revert)", rel, lines), nil
 }
 
 type EditTool struct{}
@@ -135,13 +135,18 @@ func (t *EditTool) Execute(ctx ExecContext, input json.RawMessage) (string, erro
 	if in.FilePath == "" {
 		return "", fmt.Errorf("%s", fmtErr("missing \"file_path\"", `{"file_path": "file.go", "old_string": "old", "new_string": "new"}`, input))
 	}
-	if in.OldString == "" {
-		return "", fmt.Errorf("%s", fmtErr("missing \"old_string\"", `{"file_path": "file.go", "old_string": "old", "new_string": "new"}`, input))
-	}
 
 	path := in.FilePath
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(ctx.ProjectRoot, path)
+	}
+
+	// Build files are structurally sensitive — require explicit confirmation
+	if ctx.ReadInput != nil && isBuildFile(in.FilePath) {
+		answer, err := ctx.ReadInput("⚠️ Editing build file " + in.FilePath + ". Confirm? (Y/n): ")
+		if err != nil || strings.ToLower(answer) != "y" {
+			return "Edit cancelled — build file requires confirmation", nil
+		}
 	}
 
 	content, err := os.ReadFile(path)
@@ -150,13 +155,28 @@ func (t *EditTool) Execute(ctx ExecContext, input json.RawMessage) (string, erro
 	}
 
 	text := string(content)
+
+	// Empty old_string = append mode: read file and append new_string at end.
+	// Skips diff preview and confirmation since there's no risk of replacement ambiguity.
+	if in.OldString == "" {
+		if !strings.HasSuffix(text, "\n") {
+			text += "\n"
+		}
+		newText := text + in.NewString
+		PushUndo(path)
+		if err := os.WriteFile(path, []byte(newText), 0644); err != nil {
+			return "", fmt.Errorf("write file: %w", err)
+		}
+		rel, _ := filepath.Rel(ctx.ProjectRoot, path)
+		return fmt.Sprintf("Appended %d bytes to %s", len(newText)-len(text), rel), nil
+	}
 	count := strings.Count(text, in.OldString)
 
 	if count == 0 {
-		return "", fmt.Errorf("old_string not found in file %s", in.FilePath)
+		return "", fmt.Errorf("old_string not found in file %s", path)
 	}
 	if count > 1 {
-		return "", fmt.Errorf("found %d matches for old_string in %s. Provide more surrounding context in old_string to identify the correct match", count, in.FilePath)
+		return "", fmt.Errorf("found %d matches for old_string in %s. Provide more surrounding context in old_string to identify the correct match", count, path)
 	}
 
 	newText := strings.Replace(text, in.OldString, in.NewString, 1)
@@ -179,5 +199,17 @@ func (t *EditTool) Execute(ctx ExecContext, input json.RawMessage) (string, erro
 	rel, _ := filepath.Rel(ctx.ProjectRoot, path)
 	oldLines := strings.Count(in.OldString, "\n") + 1
 	newLines := strings.Count(in.NewString, "\n") + 1
-	return fmt.Sprintf("❯ edit(%s)\n── Replaced %d lines with %d lines ──\n%s", rel, oldLines, newLines, diff), nil
+	return fmt.Sprintf("❯ edit(%s)\n── Replaced %d lines with %d lines ──\n%s\n(backup saved — use 'undo' to revert)", rel, oldLines, newLines, diff), nil
+}
+
+func isBuildFile(path string) bool {
+	base := strings.ToLower(filepath.Base(path))
+	switch base {
+	case "makefile", "cmakelists.txt", "dockerfile", "docker-compose.yml",
+		"docker-compose.yaml", "composer.json", "package.json", "gemfile",
+		"cargo.toml", "build.gradle", "build.gradle.kts", ".gitignore",
+		".gitlab-ci.yml", ".github/workflows/ci.yml":
+		return true
+	}
+	return strings.HasSuffix(base, ".mk")
 }
