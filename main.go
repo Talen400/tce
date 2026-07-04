@@ -14,8 +14,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/talen/tce/internal/agent"
+	"github.com/talen/tce/internal/config"
 	"github.com/talen/tce/internal/llm"
 	"github.com/talen/tce/internal/project"
+	"github.com/talen/tce/internal/session"
 	"github.com/talen/tce/internal/tools"
 	"github.com/talen/tce/internal/tui"
 )
@@ -32,6 +34,8 @@ func main() {
 	cliMode := flag.Bool("cli", false, "Use CLI mode instead of TUI")
 	contextSize := flag.Int("context-size", 0, "Max context tokens before compaction (0=auto)")
 	showVersion := flag.Bool("version", false, "Show version")
+	verbose := flag.Bool("verbose", false, "Show detailed tool call payloads")
+	resume := flag.String("resume", "", "Resume a previous session from .tce/sessions/ file")
 	flag.Parse()
 
 	if *showVersion {
@@ -55,6 +59,14 @@ func main() {
 	profile := project.Detect(absRoot)
 	if profile.Root == "" {
 		profile.Root = absRoot
+	}
+
+	projectCfg := config.Load(absRoot)
+	if *model == "" && projectCfg.Model != "" {
+		*model = projectCfg.Model
+	}
+	if *agentType == "build" && projectCfg.Agent != "" {
+		*agentType = projectCfg.Agent
 	}
 
 	llmCfg := llm.DefaultConfig
@@ -123,6 +135,7 @@ func main() {
 		MaxToolContent:  modelProfile.MaxToolContent,
 		TokenRatio:      modelProfile.TokenRatio,
 		DisableStream:   disableStream,
+		Verbose:         *verbose || projectCfg.Verbose(),
 	}
 
 	ag := agent.New(agentCfg)
@@ -137,8 +150,25 @@ func main() {
 		cancel()
 	}()
 
+	if *resume != "" {
+		modelName, prevTurns, prevTokIn, prevTokOut, msgs, err := session.Load(*resume)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading session %s: %v\n", *resume, err)
+			os.Exit(1)
+		}
+		if len(msgs) > 0 {
+			ag.SetMessages(msgs)
+		}
+		fmt.Printf("📂 Resumed session from %s (model: %s, %d turns, ~%d tokens)\n", *resume, modelName, prevTurns, prevTokIn+prevTokOut)
+	}
+
 	if *cliMode {
 		runCLI(ctx, ag, profile, at, llmClient.ModelName())
+		turns, tokIn, tokOut := ag.Stats()
+		if turns > 1 {
+			fmt.Printf("\n📊 Session: %d turns, ~%d tokens in, ~%d tokens out\n", turns, tokIn, tokOut)
+			session.Save(profile.Root, llmClient.ModelName(), turns, tokIn, tokOut, ag.GetMessages())
+		}
 		return
 	}
 

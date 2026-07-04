@@ -1,7 +1,7 @@
-# TCE — Plano de Melhorias
+# TCE — Roadmap
 
-> Gerado em: 2026-07-03 (atualizado)
 > Projeto: `github.com/talen/tce`
+> Atualizado em: 2026-07-03
 
 ---
 
@@ -12,331 +12,105 @@
 
 ---
 
-## Fase 0 — Fundação
+## Fase 0 — Fundação (curto prazo)
 
-*Impacto: Estrutura do repositório, CI, e ferramentas base.*
+- [x] Adicionar `LICENSE` (MIT)
+- [x] Adicionar `CONTRIBUTING.md` com instruções de setup, build e padrão de commits (Conventional Commits)
+- [x] Criar suíte de testes unitários mínima — 180+ testes cobrindo parsing, perfis de modelo, tools, agente, compactor, LLM client
+- [x] Configurar GitHub Actions: build + test + `go vet` + lint (`golangci-lint`) em cada PR
+- [x] Adicionar `.tceignore` (padrão gitignore-style) para excluir diretórios de `glob`/`grep`
 
-### [x] 0.1 Licença MIT
+## Fase 1 — Segurança e confiabilidade
 
-**Arquivo:** `LICENSE`
+- [x] Blocklist de comandos perigosos na tool `bash` (regex para padrões destrutivos conhecidos)
+- [x] Timeout configurável por execução de comando
+- [x] Confirmação interativa para comandos fora do diretório do projeto
+- [x] Diff preview (unified diff) antes de aplicar mudanças via tool `edit`
+- [x] Comando `tce undo` para reverter a última edição de arquivo (buffer local, sem depender de git)
+- [x] Retry com backoff exponencial para chamadas de API (timeout, rate limit, 5xx)
 
-Adicionada licença MIT padrão.
+## Fase 2 — Experiência do usuário
 
-### [x] 0.2 Guia de Contribuição
+- [x] Streaming de respostas do modelo no terminal (token a token)
+- [ ] Persistência de sessão (`.tce/sessions/*.json`) com `tce --resume`
+- [ ] Arquivo de configuração por projeto (`.tce.yaml`): modelo padrão, agente padrão, diretórios ignorados
+- [ ] Contagem de tokens e custo estimado por sessão (exibido ao final da execução)
+- [ ] Modo verboso/debug (`--verbose`) mostrando payloads de tool calls
 
-**Arquivo:** `CONTRIBUTING.md`
+## Fase 3 — Integração com git
 
-Instruções de setup, build, teste, lint, padrão de commits (Conventional Commits) e PRs.
+- [ ] Geração automática de mensagens de commit a partir do diff das mudanças aplicadas
+- [ ] Comando para revisar (`tce review`) mudanças pendentes antes de commitar
+- [ ] Flag para criar branch automaticamente antes de uma sessão de edição
 
-### [x] 0.3 GitHub Actions + Linter
+## Fase 4 — Extensibilidade
 
-**Arquivos:** `.github/workflows/ci.yml`, `.golangci.yml`
+- [ ] Abstrair interface `Tool` para permitir tools nativas e tools externas
+- [ ] Cliente MCP (stdio/SSE) para conectar servidores MCP externos como tools
+- [ ] Sistema de plugins simples (Go plugins ou subprocessos) para tools customizadas por usuário
 
-Workflow CI com build, vet, lint (golangci-lint) e testes em cada PR.
+## Fase 5 — Distribuição
 
-### [x] 0.4 `.tceignore`
+- [ ] Publicar releases no GitHub com binários pré-compilados (Linux/macOS/Windows, amd64/arm64)
+- [ ] Ajustar `install.sh` para baixar binário da release ao invés de exigir Go instalado
+- [ ] Publicar fórmula Homebrew (`brew install talen400/tce/tce`)
+- [ ] Página de documentação (GitHub Pages ou README expandido) com exemplos de uso por perfil de modelo
 
-**Arquivos:** `.tceignore`, `internal/tools/ignore.go`
+## Fase 6 — Qualidade contínua
 
-Arquivo de padrões gitignore-style para excluir diretórios de `glob`/`grep`. Parsing completo: comentários, negação `!`, `**`, diretórios, âncoras.
+- [ ] Testes de integração end-to-end (simulando sessão real com mock de API)
+- [ ] Benchmark de latência por provedor (Ollama local vs APIs remotas)
+- [ ] Telemetria opcional (opt-in) de erros para priorizar correções
 
-### [x] 0.5 Testes unitários
+## Fase 7 — Documentação e acompanhamento de estudo
 
-Suíte de 180 testes já existente cobre parsing de tool calls, perfis de modelo, e demais pacotes.
-
----
-
-## Fase 1 — Segurança e Confiabilidade
-
-*Impacto: Proteção contra comandos destrutivos, previsibilidade de edições, e reversão de erros.*
-
-> Itens históricos (1.1 e 1.2 do plano original) já foram resolvidos em fases anteriores.
-
-### [x] 1.1 Blocklist de Comandos Perigosos (Bash)
-
-**Arquivo:** `internal/tools/bash.go`
-
-Lista de padrões regex para bloquear comandos destrutivos: `rm -rf /`, `dd if=`, `mkfs`, `chmod 777 /`, fork bombs, `curl|bash`. O comando é recusado com mensagem clara antes da execução.
-
-### [x] 1.2 Timeout Configurável
-
-**Arquivo:** `internal/tools/bash.go` (já existente)
-
-Campo `timeout` no schema (default 30s). Modelo pode especificar timeout por comando.
-
-### [x] 1.3 Confirmação para Comandos Fora do Projeto
-
-**Arquivo:** `internal/tools/bash.go`
-
-Se `workdir` estiver fora de `ProjectRoot`, o tool pede confirmação interativa via `ReadInput`. Sem `ReadInput`, o comando é bloqueado com erro.
-
-### [x] 1.4 Diff Preview (Edit)
-
-**Arquivos:** `internal/tools/write.go`, `internal/tools/diff.go`
-
-Antes de aplicar um `edit`, exibe um diff unificado das mudanças e pede confirmação interativa. O diff também é incluído no resultado da ferramenta.
-
-### [x] 1.5 `tce undo`
-
-**Arquivos:** `internal/tools/undo.go`
-
-Buffer local (sem git) que salva o conteúdo original antes de `write`/`edit`. A tool `undo` restaura a última versão salva. Suporta múltiplos níveis de undo.
-
-### [x] 1.6 Retry com Backoff (API)
-
-**Arquivo:** `internal/llm/client.go` (já existente)
-
-`doRequest()` implementa backoff exponencial (100ms → 300ms → 900ms) para 429 e 5xx, com jitter.
+- [ ] Criar `docs/decisions/` com ADRs (Architecture Decision Records) — um arquivo curto por decisão técnica relevante (contexto, decisão, alternativas consideradas, consequências)
+- [ ] Criar `docs/devlog.md` — diário de desenvolvimento com entradas cronológicas curtas: o que foi feito, o que foi aprendido, dificuldades encontradas
+- [ ] Criar `docs/glossario.md` — conceitos técnicos aprendidos durante o projeto (Go, arquitetura de agentes, LLM tooling, MCP, etc.), 2-3 linhas por termo
+- [ ] Padronizar comentários de código para explicar o "porquê" das decisões não óbvias, referenciando o ADR correspondente quando existir
+- [ ] Adicionar diagramas versionados em Mermaid dentro dos `.md` (fluxo de tool calling, arquitetura geral, ciclo de vida de uma sessão)
+- [ ] Ao final de cada fase do roadmap, escrever um resumo "o que eu não sabia antes e sei agora" (formato flashcard, revisão rápida)
+- [ ] Manter mensagens de commit descritivas o suficiente para servirem como changelog de aprendizado (não só "fix bug")
 
 ---
 
-## Fase 2 — Otimização de Tokens
-
-*Impacto: Permite mais turns úteis em modelos pequenos (0.8B/4B com 32K contexto).*
-
-### [x] 2.1 Tokenizer Real
-
-**Arquivos:** `internal/compactor/compactor.go`
-
-**Solução:** `estimateTokens` agora é método em `*Compactor` e usa `TokenRatio` configurável (chars/token). Valor padrão 3.5 (compatível Qwen). Modelos podem definir seu próprio ratio via perfil.
-
-### [ ] 2.2 Cache de Tool Definitions Serializadas
-
-**Arquivo:** `internal/agent/loop.go` — `cachedToolDefs` já é cacheado em `New()`. A implementação já está correta.
-
-### [x] 2.3 Tool Content Truncation
-
-**Arquivo:** `internal/compactor/compactor.go`
-
-**Solução:** `MaxToolContentLen` é configurável por perfil de modelo (ex: 500 para 0.8B, 1000 para 4B+).
-
-### [ ] 2.4 Tool Definition Size Reduction (Minimal Mode)
-
-**Arquivos:** `internal/tools/*.go`
-
-**Status:** Pendente. As tools já têm `ShortDescription()`, mas o Minimal Mode poderia reduzir ainda mais os schemas.
-
-### [ ] 2.5 Cachear/Omitir Tool Definitions no Request
-
-**Arquivo:** `internal/llm/client.go`
-
-**Status:** Pendente. Investigar se a API mantém cache das tool definitions.
-
----
-
-## Fase 3 — Testes
-
-*Impacto: Confiabilidade.*
-
-### [x] Compactor Tests
-### [x] Tool Tests
-### [x] Agent Loop Tests
-### [x] LLM Client Tests
-### [x] Permission Tests
-### [x] Project Detect Tests (parcial — há falhas pré-existentes com paths fixos)
-
-**Status geral:** Testes existentes passam (exceto `detect_test.go` que usa paths `/tmp/testprojects/*`).
-
-### [x] Testes para novos módulos
-- **`internal/tools/parse.go`**: `firstOf`, `tryFixJSON`, `fuzzyMatch` ✅
-- **`internal/llm/model.go`**: `MatchProfile`, match exato, prefixo, fallback ✅
-- **`internal/tools/search.go`**: `parseLiteHTML`, `stripTags`, `decodeEntities`, `decodeURLParam` ✅
-
----
-
-## Fase 4 — Performance Geral
-
-*Impacto: Velocidade de execução e uso de memória.*
-
-### [x] 4.1 Glob Walk Optimization
-
-**Arquivo:** `internal/tools/read.go`
-
-**Resolvido em:** Já usa `filepath.WalkDir` com `filepath.SkipDir` para `.git`, `node_modules`, etc.
-
-### [x] 4.2 SSE Parser Robustez
-
-**Arquivo:** `internal/llm/client.go`
-
-**Solução:** Implementado parser SSE stateful (`sseParser`) que acumula múltiplas linhas `data:`, ignora `event:`/`retry:`, trata keep-alives e `[DONE]`.
-
-### [x] 4.3 Dedup: `truncate` Function
-
-**Arquivos:** `main.go`, `tui.go` → `internal/util/strings.go`
-
-**Resolvido em:** Já está em `internal/util/strings.go`.
-
-### [x] 4.4 Dedup: Chat/ChatStream Request Building
-
-**Arquivo:** `internal/llm/client.go`
-
-**Status:** Parcial — `Chat()` e `ChatStream()` ainda compartilham ~40 linhas de construção de request.
-
-### [x] 4.5 Remover Dead Code
-
-**Arquivos:** `detect.go`, `read.go`
-
-**Resolvido em:** `detect.go` não tem mais duplicatas de Rust. `read.go` sem dead assignments.
-
----
-
-## Fase 5 — UX e Resiliência
-
-*Impacto: Experiência do usuário e robustez em produção.*
-
-### [x] 5.1 Retry em LLM Calls
-
-**Arquivo:** `internal/llm/client.go`
-
-**Resolvido em:** Já implementado via `doRequest()` com backoff (100ms, 300ms, 900ms) para 429 e 5xx.
-
-### [x] 5.2 Subagent Recursion Limit
-
-**Arquivos:** `internal/tools/task.go`, `internal/agent/loop.go`
-
-**Resolvido em:** `MaxSubAgentDepth = 3` verificado em `TaskTool.Execute()`.
-
-### [x] 5.3 Context Cancellation no TUI
-
-**Arquivo:** `internal/tui/tui.go`
-
-**Resolvido em:** `context.WithCancel` no `runAgent()`, Ctrl-C no TUI cancela o agente.
-
-### [x] 5.4 TUI: `/clear` Command
-
-**Arquivo:** `internal/tui/tui.go`
-
-**Resolvido em:** Handler para `/clear` reseta `m.content` e `m.viewport`.
-
-### [x] 5.5 TUI: Limitar Histórico do Viewport
-
-**Arquivo:** `internal/tui/tui.go`
-
-**Resolvido em:** `trimContent()` mantém últimas `maxViewportLines = 5000` linhas.
-
----
-
-## Melhorias Implementadas (fora do plano original)
-
-### [x] Parsing Universal (Fase A do plano v2)
-
-**Arquivos:** `internal/tools/parse.go` (novo), `read.go`, `write.go`, `bash.go`, `task.go`
-
-Todas as tools agora aceitam múltiplos nomes de campo via `firstOf()`:
-- `file_path` → também `path`, `file`, `filename`
-- `pattern` → também `search`, `query`, `find`, `text`, `regex`
-- `content` → também `text`, `data`, `code`
-- `old_string` → também `old`, `find`, `from`
-- `new_string` → também `new`, `replace`, `to`
-- `timeout` → também `time`
-- `workdir` → também `dir`, `directory`, `cwd`
-
-### [x] Recuperação de JSON Malformado
-
-**Arquivo:** `internal/tools/parse.go` — `tryFixJSON()`
-
-Tenta extrair JSON de markdown, remover prefixos/sufixos, escapar newlines dentro de strings.
-
-### [x] Fuzzy Match de Tool Name
-
-**Arquivo:** `internal/tools/parse.go` — `fuzzyMatch()`, integrado em `Registry.Execute()`
-
-Se o LLM chamar `bash` em vez de `bash`, ou `wite` em vez de `write`, faz prefix match automático.
-
-### [x] Validação Pré-Execução
-
-**Arquivo:** `internal/tools/registry.go`
-
-Antes de executar, valida se JSON é válido. Se não, tenta `tryFixJSON()`. Retorna erro claro e acionável.
-
-### [x] Feedback Estruturado
-
-Todas as tools agora usam formato consistente:
-```
-❯ tool(args)
-── Section ──
-content
-── End ──
-```
-
-### [x] Configuração Parametrizada por Modelo
-
-**Arquivo:** `internal/llm/model.go` (novo)
-
-`MatchProfile()` retorna `Profile` com `MaxContext`, `MaxTurns`, `Temperature`, `MinimalMode`, `MaxToolContent`, `KeepTurns`, `TokenRatio`, `ForceSingleCall`. Match por nome exato > prefixo > fallback.
-
-### [x] Forçar 1 Tool Call (ForceSingleCall)
-
-**Arquivo:** `internal/agent/loop.go`
-
-Se o perfil configurar, descarta tool calls extras e executa apenas a primeira.
-
-### [x] Recovery de Erros Consecutivos
-
-**Arquivo:** `internal/agent/loop.go`
-
-Se uma mesma tool falha 3x seguidas, interrompe com erro específico.
-
----
-
-## Melhorias Futuras
-
-### Funcionalidades
-
-| Feature | Descrição | Prioridade |
-|---------|-----------|------------|
-| **Agent Review** | Novo tipo de agente que apenas lê código e sugere melhorias | Média |
-| **Diff preview** | Antes de `write`/`edit`, mostrar diff e pedir confirmação | Média |
-| **Multi-model** | Usar modelo pequeno (0.8B) para explorer, grande (9B) para build | Média |
-| **Session save/restore** | Salvar histórico de mensagens e retomar sessão | Baixa |
-| **Prompt templates** | Templates customizáveis por linguagem/framework | Baixa |
-
-### Otimização de Tokens
-
-| Item | Descrição | Esforço |
-|------|-----------|---------|
-| Tool Description Reduction | Reduzir ainda mais schemas em MinimalMode | 1h |
-| Cache tool defs no request | Enviar tools apenas quando mudam | 1h |
-
-### Testes
-
-| Item | Descrição | Esforço | Status |
-|------|-----------|---------|--------|
-| `parse_test.go` | `firstOf`, `tryFixJSON`, `fuzzyMatch` | 30min | ✅ |
-| `model_test.go` | `MatchProfile` com match exato/prefixo/fallback | 15min | ✅ |
-| `search_test.go` | `parseLiteHTML`, `stripTags`, `decodeEntities` | 20min | ✅ |
-| Fix `detect_test.go` | Substituir paths fixos por `t.TempDir()` | 15min | ✅ |
-| Benchmarks | 10 benchmarks (compactor, parse, read/grep, agent, prompt, search) | 30min | ✅ |
-
-### Técnico
-
-| Item | Descrição | Esforço |
-|------|-----------|---------|
-| Dedup Chat/ChatStream | Extrair `buildRequest()` compartilhado | 30min |
-| GitHub Actions | CI: build + lint + test em cada PR | 1h | ✅ |
-| `golangci-lint` | Configurar linter | 30min | ✅ |
-
----
-
-## Fase 7 — Documentação de Funções
-
-*Impacto: Qualidade do código, manutenibilidade, e geração de documentação.*
-
-### [ ] 7.1 Go Doc Comments em Funções Exportadas
-
-Adicionar `// FuncName ...` doc comments em todas as **85 funções exportadas** (0% → 100%).
-
-### [ ] 7.2 Package-level Doc Comments
-
-Adicionar `// Package foo ...` nos 17 pacotes.
-
-### [ ] 7.3 Tipos e Constantes Exportadas
-
-Documentar tipos como `Config`, `Client`, `Response`, `Tool`, `Registry` e constantes exportadas.
-
-### [ ] 7.4 Documentação Incremental
-
-Toda nova função adicionada já deve sair com Go doc comment.
+## Apêndice — Histórico de Melhorias
+
+### Melhorias da fase de otimização (antiga Fase 2)
+- [x] Tokenizer Real: `estimateTokens` usa `TokenRatio` configurável (padrão 3.5)
+- [x] Tool Content Truncation: `MaxToolContentLen` configurável por perfil
+
+### Melhorias de teste (antiga Fase 3)
+- [x] Compactor Tests
+- [x] Tool Tests
+- [x] Agent Loop Tests
+- [x] LLM Client Tests
+- [x] Permission Tests
+- [x] Benchmarks (10 benchmarks em compactor, parse, read, agent, prompt, search)
+
+### Melhorias de performance (antiga Fase 4)
+- [x] Glob Walk Optimization (WalkDir + SkipDir)
+- [x] SSE Parser stateful (múltiplas linhas `data:`, keep-alives, `[DONE]`)
+- [x] Dedup `truncate` → `internal/util/strings.go`
+- [x] Dead code removido
+
+### Melhorias de UX (antiga Fase 5)
+- [x] Retry em LLM Calls (backoff 100ms → 300ms → 900ms)
+- [x] Subagent Recursion Limit (MaxSubAgentDepth = 3)
+- [x] Context Cancellation no TUI (Ctrl+C)
+- [x] TUI: `/clear` Command
+- [x] TUI: Limitar Histórico do Viewport (5000 linhas)
+
+### Melhorias Implementadas (fora do plano original)
+
+- [x] Parsing Universal — todas as tools aceitam múltiplos nomes de campo via `firstOf()`
+- [x] Recuperação de JSON Malformado — `tryFixJSON()` extrai JSON de markdown, converte single quotes
+- [x] Fuzzy Match de Tool Name — prefix match automático se o LLM errar o nome
+- [x] Validação Pré-Execução — valida JSON antes de executar
+- [x] Feedback Estruturado — formato consistente `❯ tool(args)\n── Section ──\n...\n── End ──`
+- [x] Configuração Parametrizada por Modelo — `MatchProfile()` por nome exato > prefixo > fallback
+- [x] Forçar 1 Tool Call (ForceSingleCall) — para perfis que não suportam paralelo
+- [x] Recovery de Erros Consecutivos — tool desabilitada após N falhas seguidas
 
 ---
 
@@ -363,9 +137,11 @@ internal/
 │   ├── write.go            → WriteTool, EditTool (diff preview)
 │   ├── bash.go             → BashTool (blocklist + dir check)
 │   ├── ask.go              → AskTool
-│   └── task.go             → TaskTool (subagente)
+│   ├── task.go             → TaskTool (subagente)
+│   └── search.go           → SearchTool (DuckDuckGo)
 ├── permission/             → regras de controle de acesso
 ├── project/                → detecção de linguagem
+│   └── detect.go           → Makefile, go.mod, Cargo.toml, etc.
 ├── tui/                    → interface Bubbletea
 └── util/                   → funções utilitárias (Truncate)
 ```

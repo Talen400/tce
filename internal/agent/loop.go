@@ -33,7 +33,7 @@ var codeRequestPatterns = []string{
 	"faz um", "faça um", "faça uma", "faz uma",
 	"implement", "write a", "make a", "cria", "crie",
 	"desenvolva", "desenvolve", "create a", "build a",
-	"ft_", "crie um", "cria um",
+	"crie um", "cria um",
 }
 
 var minimalSafeTools = map[string]bool{
@@ -58,6 +58,8 @@ type Config struct {
 	KeepTurns       int
 	MaxToolContent  int
 	TokenRatio      float64
+	DisableStream   bool
+	Verbose         bool
 }
 
 type Agent struct {
@@ -67,6 +69,10 @@ type Agent struct {
 	messages       []llm.Message
 	cachedToolDefs []llm.ToolDef
 	depth          int
+	jsonRetries    int
+	turnCount      int
+	totalInputTokens  int
+	totalOutputTokens int
 }
 
 func New(cfg Config) *Agent {
@@ -140,23 +146,67 @@ func (a *Agent) Run(ctx context.Context, userPrompt string, onToken func(string)
 
 	for turn < maxTurns {
 		turn++
+		a.turnCount++
 
 		a.messages = a.compactor.Compact(a.messages)
 
 		var streamedContent string
-		resp, err := a.cfg.LLM.ChatStream(ctx, a.messages, a.cachedToolDefs, func(chunk string) {
-			streamedContent += chunk
-			if onToken != nil {
-				onToken(chunk)
+		var resp *llm.Response
+		var err error
+
+		// Estimate input tokens
+		for _, m := range a.messages {
+			a.totalInputTokens += estimateTokens(m.Content, a.cfg.TokenRatio)
+		}
+
+		if a.cfg.DisableStream {
+			resp, err = a.cfg.LLM.Chat(ctx, a.messages, a.cachedToolDefs)
+			if err == nil {
+				streamedContent = resp.Content
+				a.totalOutputTokens += estimateTokens(resp.Content, a.cfg.TokenRatio)
+				if onToken != nil {
+					onToken(resp.Content)
+				}
 			}
-		})
+		} else {
+			resp, err = a.cfg.LLM.ChatStream(ctx, a.messages, a.cachedToolDefs, func(chunk string) {
+				streamedContent += chunk
+				if onToken != nil {
+					onToken(chunk)
+				}
+			})
+			if err == nil {
+				a.totalOutputTokens += estimateTokens(streamedContent, a.cfg.TokenRatio)
+			}
+		}
 		if err != nil {
 			return "", fmt.Errorf("LLM call (turn %d): %w", turn, err)
+		}
+
+		// Verbose: print tool call payloads
+		if a.cfg.Verbose && len(resp.ToolCalls) > 0 {
+			for _, tc := range resp.ToolCalls {
+				fmt.Fprintf(os.Stderr, "[verbose] tool call: %s(%s)\n", tc.Name, tc.Arguments)
+			}
 		}
 
 		if len(resp.ToolCalls) == 0 {
 			if streamedContent == "" {
 				streamedContent = "(no response)"
+			}
+
+			// Retry with reminder if the model attempted JSON but failed format
+			if a.jsonRetries < 1 && looksLikeFailedJSON(streamedContent) {
+				a.jsonRetries++
+				a.messages = append(a.messages, llm.Message{Role: "assistant", Content: streamedContent})
+				a.messages = append(a.messages, llm.Message{
+					Role: "user",
+					Content: "Your response contained a malformed tool call JSON. " +
+						"Follow this EXACT format with no surrounding text:\n" +
+						`{"name":"tool_name","arguments":{"param":"value"}}`,
+				})
+				turn-- // don't count this as a full turn
+				continue
 			}
 
 			if turn == 1 && isCodeRequest(userPrompt) {
@@ -173,6 +223,12 @@ func (a *Agent) Run(ctx context.Context, userPrompt string, onToken func(string)
 
 		if a.cfg.ForceSingleCall && len(resp.ToolCalls) > 1 {
 			resp.ToolCalls = resp.ToolCalls[:1]
+		}
+
+		// If tool calls were extracted from text (JSON fallback), clear streamed content
+		// to avoid adding raw JSON as assistant content
+		if len(resp.ToolCalls) > 0 && strings.HasPrefix(strings.TrimSpace(streamedContent), "{") && strings.Contains(streamedContent, `"name"`) {
+			streamedContent = ""
 		}
 
 		a.messages = append(a.messages, llm.Message{
@@ -241,7 +297,7 @@ func (a *Agent) Run(ctx context.Context, userPrompt string, onToken func(string)
 
 			if strings.HasPrefix(result, "Error") {
 				toolErrors[tc.Name]++
-				if toolErrors[tc.Name] >= 3 {
+				if toolErrors[tc.Name] >= 5 {
 					return "", fmt.Errorf("tool %q failed %d times consecutively", tc.Name, toolErrors[tc.Name])
 				}
 			} else {
@@ -274,6 +330,25 @@ func (a *Agent) Run(ctx context.Context, userPrompt string, onToken func(string)
 	}
 
 	return "", fmt.Errorf("reached maximum turns (%d) without completing", maxTurns)
+}
+
+func estimateTokens(text string, ratio float64) int {
+	if ratio <= 0 {
+		ratio = 3.5
+	}
+	return int(float64(len(text)) / ratio)
+}
+
+func (a *Agent) Stats() (turns int, tokenIn int, tokenOut int) {
+	return a.turnCount, a.totalInputTokens, a.totalOutputTokens
+}
+
+func (a *Agent) SetMessages(msgs []llm.Message) {
+	a.messages = msgs
+}
+
+func (a *Agent) GetMessages() []llm.Message {
+	return a.messages
 }
 
 func (a *Agent) RunSubAgent(ctx context.Context, agentType string, prompt string) (string, error) {
@@ -366,7 +441,40 @@ func hasHallucinatedCode(text string) bool {
 	hasCodeBlock := strings.Contains(text, "```c") || strings.Contains(text, "```go") ||
 		strings.Contains(text, "```C") || strings.Contains(text, "```")
 	hasToolMarker := strings.Contains(text, "❯ write(") || strings.Contains(text, "❯ edit(")
-	return hasCodeBlock && !hasToolMarker
+	if !hasCodeBlock || hasToolMarker {
+		return false
+	}
+	// Only block if code lines predominate (> 50% of non-empty lines)
+	lines := strings.Split(text, "\n")
+	totalNonEmpty := 0
+	codeLines := 0
+	inCode := false
+	for _, l := range lines {
+		trimmed := strings.TrimSpace(l)
+		if trimmed == "" {
+			continue
+		}
+		totalNonEmpty++
+		if strings.HasPrefix(trimmed, "```") {
+			inCode = !inCode
+			continue
+		}
+		if inCode {
+			codeLines++
+		}
+	}
+	if totalNonEmpty == 0 {
+		return false
+	}
+	return codeLines > 0 && float64(codeLines)/float64(totalNonEmpty) > 0.5 && codeLines >= 3
+}
+
+func looksLikeFailedJSON(text string) bool {
+	lower := strings.ToLower(text)
+	return (strings.Contains(lower, `"name"`) && strings.Contains(lower, `{`)) ||
+		(strings.Contains(lower, `'name'`) && strings.Contains(lower, `{`)) ||
+		strings.Contains(lower, "<tool_call>") ||
+		strings.Contains(lower, "```json")
 }
 
 func (a *Agent) autoBootstrap(ctx context.Context) {
