@@ -46,21 +46,47 @@ Suíte de 180 testes já existente cobre parsing de tool calls, perfis de modelo
 
 ---
 
-## Fase 1 — Correções Críticas
+## Fase 1 — Segurança e Confiabilidade
 
-*Impacto: Funcionalidade. Bugs que quebram contratos entre LLM e ferramentas.*
+*Impacto: Proteção contra comandos destrutivos, previsibilidade de edições, e reversão de erros.*
 
-### ~~1.1 GrepTool: `strings.Contains` → `regexp.MatchString`~~ ✅
+> Itens históricos (1.1 e 1.2 do plano original) já foram resolvidos em fases anteriores.
 
-**Arquivo:** `internal/tools/read.go`
+### [x] 1.1 Blocklist de Comandos Perigosos (Bash)
 
-**Resolvido em:** Fase 1 — Parsing Universal. O GrepTool já usa `regexp.Compile` e `re.MatchString`.
+**Arquivo:** `internal/tools/bash.go`
 
-### ~~1.2 LLM Client: Tool Call Delta Aggregation~~ ✅
+Lista de padrões regex para bloquear comandos destrutivos: `rm -rf /`, `dd if=`, `mkfs`, `chmod 777 /`, fork bombs, `curl|bash`. O comando é recusado com mensagem clara antes da execução.
 
-**Arquivo:** `internal/llm/client.go`
+### [x] 1.2 Timeout Configurável
 
-**Resolvido em:** Já estava implementado antes. O delta aggregation por `index` funciona corretamente.
+**Arquivo:** `internal/tools/bash.go` (já existente)
+
+Campo `timeout` no schema (default 30s). Modelo pode especificar timeout por comando.
+
+### [x] 1.3 Confirmação para Comandos Fora do Projeto
+
+**Arquivo:** `internal/tools/bash.go`
+
+Se `workdir` estiver fora de `ProjectRoot`, o tool pede confirmação interativa via `ReadInput`. Sem `ReadInput`, o comando é bloqueado com erro.
+
+### [x] 1.4 Diff Preview (Edit)
+
+**Arquivos:** `internal/tools/write.go`, `internal/tools/diff.go`
+
+Antes de aplicar um `edit`, exibe um diff unificado das mudanças e pede confirmação interativa. O diff também é incluído no resultado da ferramenta.
+
+### [x] 1.5 `tce undo`
+
+**Arquivos:** `internal/tools/undo.go`
+
+Buffer local (sem git) que salva o conteúdo original antes de `write`/`edit`. A tool `undo` restaura a última versão salva. Suporta múltiplos níveis de undo.
+
+### [x] 1.6 Retry com Backoff (API)
+
+**Arquivo:** `internal/llm/client.go` (já existente)
+
+`doRequest()` implementa backoff exponencial (100ms → 300ms → 900ms) para 429 e 5xx, com jitter.
 
 ---
 
@@ -331,9 +357,11 @@ internal/
 │   ├── parse.go            → firstOf, tryFixJSON, fuzzyMatch
 │   ├── registry.go         → Tool interface, Registry, Execute()
 │   ├── ignore.go           → IgnoreMatcher gitignore-style
+│   ├── diff.go             → unifiedDiff helper
+│   ├── undo.go             → PushUndo/PopUndo/ClearUndo + UndoTool
 │   ├── read.go             → ReadTool, GrepTool, GlobTool
-│   ├── write.go            → WriteTool, EditTool
-│   ├── bash.go             → BashTool
+│   ├── write.go            → WriteTool, EditTool (diff preview)
+│   ├── bash.go             → BashTool (blocklist + dir check)
 │   ├── ask.go              → AskTool
 │   └── task.go             → TaskTool (subagente)
 ├── permission/             → regras de controle de acesso

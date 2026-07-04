@@ -62,6 +62,10 @@ func (t *WriteTool) Execute(ctx ExecContext, input json.RawMessage) (string, err
 		path = filepath.Join(ctx.ProjectRoot, path)
 	}
 
+	if _, err := os.Stat(path); err == nil {
+		PushUndo(path)
+	}
+
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", fmt.Errorf("create directories: %w", err)
@@ -152,6 +156,18 @@ func (t *EditTool) Execute(ctx ExecContext, input json.RawMessage) (string, erro
 	}
 
 	newText := strings.Replace(text, in.OldString, in.NewString, 1)
+
+	diff := unifiedDiff(text, newText)
+	prompt := fmt.Sprintf("Proposed edit to %s:\n%s\nApply? (Y/n): ", in.FilePath, diff)
+	if ctx.ReadInput != nil {
+		answer, err := ctx.ReadInput(prompt)
+		if err != nil || strings.ToLower(answer) == "n" || strings.ToLower(answer) == "no" {
+			return fmt.Sprintf("Edit cancelled by user"), nil
+		}
+	}
+
+	PushUndo(path)
+
 	if err := os.WriteFile(path, []byte(newText), 0644); err != nil {
 		return "", fmt.Errorf("write file: %w", err)
 	}
@@ -159,5 +175,5 @@ func (t *EditTool) Execute(ctx ExecContext, input json.RawMessage) (string, erro
 	rel, _ := filepath.Rel(ctx.ProjectRoot, path)
 	oldLines := strings.Count(in.OldString, "\n") + 1
 	newLines := strings.Count(in.NewString, "\n") + 1
-	return fmt.Sprintf("❯ edit(%s)\n── Replaced %d lines with %d lines ──", rel, oldLines, newLines), nil
+	return fmt.Sprintf("❯ edit(%s)\n── Replaced %d lines with %d lines ──\n%s", rel, oldLines, newLines, diff), nil
 }

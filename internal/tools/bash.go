@@ -6,9 +6,20 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
+
+var dangerousPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`\brm\s+(-rf?|--recursive)\s+(/\s*$|--no-preserve-root)`),
+	regexp.MustCompile(`\bdd\s+if=`),
+	regexp.MustCompile(`\bmkfs\b`),
+	regexp.MustCompile(`\b>+\s+/dev/sd`),
+	regexp.MustCompile(`:\(\s*\)\s*\{`),
+	regexp.MustCompile(`\bchmod\s+777\s+/`),
+	regexp.MustCompile(`\b(wget|curl)\s+.*\|\s*(bash|sh)\b`),
+}
 
 type BashTool struct{}
 
@@ -48,6 +59,24 @@ func (t *BashTool) Execute(ctx ExecContext, input json.RawMessage) (string, erro
 
 	if command == "" {
 		return "", fmt.Errorf("%s", fmtErr("missing \"command\"", `{"command": "go test ./..."}`, input))
+	}
+
+	for _, pat := range dangerousPatterns {
+		if pat.MatchString(command) {
+			return fmt.Sprintf("Error: command blocked — matches dangerous pattern: %s", pat), nil
+		}
+	}
+
+	if ctx.ProjectRoot != "" && !strings.HasPrefix(workdir, ctx.ProjectRoot) {
+		msg := fmt.Sprintf("WARNING: workdir %q is outside the project root %q. Running commands outside the project can be dangerous.", workdir, ctx.ProjectRoot)
+		if ctx.ReadInput != nil {
+			answer, err := ctx.ReadInput(msg + " Continue? (y/N): ")
+			if err != nil || (strings.ToLower(answer) != "y" && strings.ToLower(answer) != "yes") {
+				return fmt.Sprintf("Command cancelled: workdir is outside project root"), nil
+			}
+		} else {
+			return fmt.Sprintf("Error: %s — set workdir inside the project or add a confirmation method", msg), nil
+		}
 	}
 
 	cmd := exec.CommandContext(ctx.Context, "sh", "-c", command)
@@ -115,7 +144,7 @@ func parseBashInput(input json.RawMessage, projectRoot string) (command string, 
 		return "", 0, ""
 	}
 
-	command = firstOf(raw, "command", "cmd", "name")
+	command = firstOf(raw, "command", "cmd", "name", "script", "run", "shell")
 
 	if commands, ok := raw["commands"].([]any); ok && len(commands) > 0 {
 		if cmdMap, ok := commands[0].(map[string]any); ok {
