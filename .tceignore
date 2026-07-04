@@ -1,0 +1,19 @@
+# TCE ignore file — gitignore-style patterns for glob/grep tools
+.git
+node_modules/
+target/
+.venv/
+vendor/
+__pycache__/
+.next/
+dist/
+build/
+*.pyc
+.env
+*.log
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

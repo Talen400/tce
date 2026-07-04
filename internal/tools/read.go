@@ -181,11 +181,20 @@ func (t *GrepTool) executeWith(ctx ExecContext, pattern, include, path string) (
 		return "", fmt.Errorf("invalid regex pattern %q: %w", pattern, err)
 	}
 
+	ignoreMatcher, _ := LoadIgnoreFile(filepath.Join(ctx.ProjectRoot, ".tceignore"))
+
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("❯ grep(%q)\n── Matches ──\n", pattern))
 
 	err = filepath.WalkDir(searchPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
+			return nil
+		}
+		relPath, _ := filepath.Rel(ctx.ProjectRoot, path)
+		if ignoreMatcher != nil && ignoreMatcher.Match(relPath, d.IsDir()) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		if d.IsDir() {
@@ -282,10 +291,19 @@ func (t *GlobTool) Execute(ctx ExecContext, input json.RawMessage) (string, erro
 		searchPath = filepath.Join(ctx.ProjectRoot, in.Path)
 	}
 
+	ignoreMatcher, _ := LoadIgnoreFile(filepath.Join(ctx.ProjectRoot, ".tceignore"))
+
 	var matches []string
 
 	err := filepath.WalkDir(searchPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
+			return nil
+		}
+		relPath, _ := filepath.Rel(ctx.ProjectRoot, path)
+		if ignoreMatcher != nil && ignoreMatcher.Match(relPath, d.IsDir()) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		if d.IsDir() {

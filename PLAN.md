@@ -1,6 +1,6 @@
 # TCE — Plano de Melhorias
 
-> Gerado em: 2026-06-30 (atualizado)
+> Gerado em: 2026-07-03 (atualizado)
 > Projeto: `github.com/talen/tce`
 
 ---
@@ -9,6 +9,40 @@
 
 - `[x]` Concluído
 - `[ ]` Pendente
+
+---
+
+## Fase 0 — Fundação
+
+*Impacto: Estrutura do repositório, CI, e ferramentas base.*
+
+### [x] 0.1 Licença MIT
+
+**Arquivo:** `LICENSE`
+
+Adicionada licença MIT padrão.
+
+### [x] 0.2 Guia de Contribuição
+
+**Arquivo:** `CONTRIBUTING.md`
+
+Instruções de setup, build, teste, lint, padrão de commits (Conventional Commits) e PRs.
+
+### [x] 0.3 GitHub Actions + Linter
+
+**Arquivos:** `.github/workflows/ci.yml`, `.golangci.yml`
+
+Workflow CI com build, vet, lint (golangci-lint) e testes em cada PR.
+
+### [x] 0.4 `.tceignore`
+
+**Arquivos:** `.tceignore`, `internal/tools/ignore.go`
+
+Arquivo de padrões gitignore-style para excluir diretórios de `glob`/`grep`. Parsing completo: comentários, negação `!`, `**`, diretórios, âncoras.
+
+### [x] 0.5 Testes unitários
+
+Suíte de 180 testes já existente cobre parsing de tool calls, perfis de modelo, e demais pacotes.
 
 ---
 
@@ -253,8 +287,30 @@ Se uma mesma tool falha 3x seguidas, interrompe com erro específico.
 | Item | Descrição | Esforço |
 |------|-----------|---------|
 | Dedup Chat/ChatStream | Extrair `buildRequest()` compartilhado | 30min |
-| GitHub Actions | CI: build + lint + test em cada PR | 1h |
-| `golangci-lint` | Configurar linter | 30min |
+| GitHub Actions | CI: build + lint + test em cada PR | 1h | ✅ |
+| `golangci-lint` | Configurar linter | 30min | ✅ |
+
+---
+
+## Fase 7 — Documentação de Funções
+
+*Impacto: Qualidade do código, manutenibilidade, e geração de documentação.*
+
+### [ ] 7.1 Go Doc Comments em Funções Exportadas
+
+Adicionar `// FuncName ...` doc comments em todas as **85 funções exportadas** (0% → 100%).
+
+### [ ] 7.2 Package-level Doc Comments
+
+Adicionar `// Package foo ...` nos 17 pacotes.
+
+### [ ] 7.3 Tipos e Constantes Exportadas
+
+Documentar tipos como `Config`, `Client`, `Response`, `Tool`, `Registry` e constantes exportadas.
+
+### [ ] 7.4 Documentação Incremental
+
+Toda nova função adicionada já deve sair com Go doc comment.
 
 ---
 
@@ -274,6 +330,7 @@ internal/
 ├── tools/                  → implementações de ferramentas
 │   ├── parse.go            → firstOf, tryFixJSON, fuzzyMatch
 │   ├── registry.go         → Tool interface, Registry, Execute()
+│   ├── ignore.go           → IgnoreMatcher gitignore-style
 │   ├── read.go             → ReadTool, GrepTool, GlobTool
 │   ├── write.go            → WriteTool, EditTool
 │   ├── bash.go             → BashTool
