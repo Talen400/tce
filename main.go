@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -36,6 +37,7 @@ func main() {
 	showVersion := flag.Bool("version", false, "Show version")
 	verbose := flag.Bool("verbose", false, "Show detailed tool call payloads")
 	resume := flag.String("resume", "", "Resume a previous session from .tce/sessions/ file")
+	branch := flag.String("branch", "", "Create and switch to a new git branch before starting")
 	flag.Parse()
 
 	if *showVersion {
@@ -107,6 +109,8 @@ func main() {
 	toolReg.Register(&tools.TaskTool{})
 	toolReg.Register(&tools.SearchTool{})
 	toolReg.Register(&tools.UndoTool{})
+	toolReg.Register(&tools.CommitTool{})
+	toolReg.Register(&tools.ReviewTool{})
 
 	at := agent.AgentType(*agentType)
 	if at != agent.AgentBuild && at != agent.AgentPlan && at != agent.AgentExplore {
@@ -139,6 +143,17 @@ func main() {
 	}
 
 	ag := agent.New(agentCfg)
+
+	if *branch != "" {
+		cmd := exec.Command("git", "checkout", "-b", *branch)
+		cmd.Dir = absRoot
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating branch %q: %v\n%s\n", *branch, err, string(out))
+			os.Exit(1)
+		}
+		fmt.Printf("🌿 Switched to new branch: %s\n", *branch)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -39,9 +39,9 @@
 
 ## Fase 3 — Integração com git
 
-- [ ] Geração automática de mensagens de commit a partir do diff das mudanças aplicadas
-- [ ] Comando para revisar (`tce review`) mudanças pendentes antes de commitar
-- [ ] Flag para criar branch automaticamente antes de uma sessão de edição
+- [x] Geração automática de mensagens de commit a partir do diff das mudanças aplicadas
+- [x] Comando para revisar (`tce review`) mudanças pendentes antes de commitar
+- [x] Flag para criar branch automaticamente antes de uma sessão de edição
 
 ## Fase 4 — Extensibilidade
 

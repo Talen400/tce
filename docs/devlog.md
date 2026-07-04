@@ -61,3 +61,26 @@
 - Adding a YAML parser from scratch works for simple key-value configs, but arrays or nested structures would need a real parser like `gopkg.in/yaml.v3`
 - The TUI creates its own agent internally via `tui.NewModel`, so the `ag` from main.go can't be used for post-session stats in TUI mode. CLI mode path works fine.
 - Token estimation with fixed char/token ratio is approximate — real tokenizers (tiktoken, etc.) would be more accurate but add dependency weight
+
+---
+
+## 2026-07-03 — Phase 3: Git Integration
+
+**Feito:**
+- Created `CommitTool` in `internal/tools/git.go`:
+  - If called with `message` param: runs `git add -A && git commit -m "message"`
+  - If called without message: returns `git diff` + `git diff --stat` so the LLM can see changes and write a message
+  - Returns commit SHA on success
+- Created `ReviewTool` in `internal/tools/git.go`:
+  - Shows `git diff --cached` (staged) and `git diff` (unstaged) with patches
+  - Lets the LLM present a summary of pending changes
+- Added `--branch <name>` flag to main.go:
+  - Runs `git checkout -b <name>` before starting the session
+  - Errors out if branch creation fails (e.g., not a git repo)
+- Registered both `commit` and `review` tools in main.go
+
+**Aprendizado:**
+- Git tools need the project root as working directory — used `cmd.Dir = ctx.ProjectRoot`
+- `git diff --stat` gives a file summary; `git diff` gives the full patch — using both for different contexts (summary for display, patch for LLM context)
+- The `CommitTool` follows the same pattern as other tools: returns useful info when called without args, takes action when called with args
+- Using `os/exec` directly (instead of going through BashTool) avoids the security blocklist — these git commands are safe by intent
