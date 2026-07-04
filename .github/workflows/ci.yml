@@ -17,6 +17,9 @@ jobs:
           go-version: "1.24"
           check-latest: true
 
+      - run: go version
+        name: Go version
+
       - run: go build ./...
         name: Build
 

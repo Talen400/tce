@@ -2,36 +2,41 @@ package agent
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/talen/tce/internal/llm"
 	"github.com/talen/tce/internal/project"
 )
 
-const systemTemplate = `You are tce, a terminal coding assistant.
+const systemTemplate = `You are TCE v%s (Terminal Coding Assistant).
 
-<project>
+## Context
 Language: %s
-Framework: %s
-Build: %s
-Test: %s
-Package: %s
-</project>
+Build: %s | Test: %s | Package: %s
 
-<rules>
-- Write production-ready, idiomatic %s code
-- When searching, prefer grep and glob before reading files
-- Use bash for running commands, tests, and git operations
-- If unsure, use the ask tool to get clarification
-- When the task is complete, provide a summary
-</rules>
-
-<tools>
+## Tools
 %s
-</tools>
+## Workflow
+1. Understand the request and identify the goal
+2. Gather information with search/read/grep
+3. Plan which files to create or modify
+4. Implement changes with write or edit
+5. Verify with bash (compile, test, lint)
+6. Finalize with a plain-text summary
 
-Think step by step, then use tools or provide the answer.
-`
+## Rules
+- Output ONLY: {"name":"tool_name","arguments":{...}} or plain text for answers. Never mix both.
+- Never write code inline — always use write or edit tool
+- Never invent APIs or file paths — use search or glob first
+- Brief reasoning (1-5 words) before each tool call: which tool? what args?
+- One tool call per response, unless parallel calls are safe
+
+## Anti-patterns
+- Writing code blocks in responses instead of using write tool
+- Assuming function signatures without searching first
+- Using bash for operations that have dedicated tools (read/write/edit/grep)`
 
 func BuildSystemPrompt(profile *project.Profile, toolDefs []llm.ToolDef) string {
 	var toolDocs strings.Builder
@@ -39,19 +44,17 @@ func BuildSystemPrompt(profile *project.Profile, toolDefs []llm.ToolDef) string 
 		toolDocs.WriteString(fmt.Sprintf("- %s: %s\n", td.Name, td.Description))
 	}
 
-	lang := profile.Language
-	if lang == "Unknown" || lang == "" {
-		lang = "the project's"
-	}
+	rules := loadProjectRules(profile.Root)
 
-	return fmt.Sprintf(systemTemplate,
+	return fmt.Sprintf(systemTemplate+
+		"\n## Project Rules\n%s",
+		TCEVersion,
 		profile.Summary(),
-		profile.Framework,
 		profile.BuildSystem,
 		profile.TestRunner,
 		profile.PackageName,
-		strings.ToLower(lang),
 		toolDocs.String(),
+		rules,
 	)
 }
 
@@ -76,43 +79,53 @@ func BuildSystemPromptMinimal(profile *project.Profile, toolNames []string) stri
 
 	extra := ""
 	if !hasWrite {
-		extra += "- I CANNOT write or edit files. I can only read and explore.\n"
+		extra += "\n- I CANNOT write or edit files. I can only read and explore."
 	}
 	if !hasTask {
-		extra += "- I CANNOT launch sub-agents.\n"
+		extra += "\n- I CANNOT launch sub-agents."
 	}
 
-	return fmt.Sprintf(`You are tce, a coding assistant for %s.
+	rules := loadProjectRules(profile.Root)
 
+	return fmt.Sprintf(`You are TCE v%s (Terminal Coding Assistant) for %s.
+
+## Context
 Project: %s (%s)
 Tools: %s
 
-GOOD EXAMPLES (use tools):
-- Read file: {"name":"read","arguments":{"file_path":"main.c"}}
-- Search code: {"name":"grep","arguments":{"pattern":"ft_printf"}}
-- Find files: {"name":"glob","arguments":{"pattern":"*.c"}}
-- Write file: {"name":"write","arguments":{"file_path":"ft_printf.c","content":"#include ..."}}
-- Web search: {"name":"search","arguments":{"query":"ft_printf implementation C"}}
+## Workflow
+Understand → Gather → Plan → Implement → Verify
 
-BAD EXAMPLES (never do these):
-- BAD: writing code directly in your response
-- BAD: inventing function signatures or APIs
-- BAD: answering with code instead of using write tool
-- BAD: guessing an API — use search tool before writing code
+## Output
+{"name":"tool","arguments":{"key":"value"}}
 
-RULES:
-- NEVER write code directly. Always use write/edit tools.
-- NEVER invent function signatures. Use search tool to discover them.
-- If you don't know a function or library: search first, then write.
-- Only answer directly for greetings or simple questions.
-- At most ONE tool call per response.
-- Output ONLY valid JSON or plain text, never both.
-%s
-User: `,
+## Rules
+- No inline code — use write/edit tools
+- Search first, never guess APIs
+- One tool per response
+- Brief reasoning: which tool? what args?%s
+%s`,
+		TCEVersion,
 		strings.ToLower(lang),
 		profile.PackageName,
 		profile.Summary(),
 		tools,
 		extra,
+		rules,
 	)
+}
+
+func loadProjectRules(root string) string {
+	if root == "" {
+		return "(none)"
+	}
+	data, err := os.ReadFile(filepath.Join(root, ".tcerules"))
+	if err != nil {
+		return "(none)"
+	}
+	content := strings.TrimSpace(string(data))
+	if content == "" {
+		return "(none)"
+	}
+	return content
 }
