@@ -23,8 +23,10 @@ var dangerousPatterns = []*regexp.Regexp{
 
 type BashTool struct{}
 
-func (t *BashTool) Name() string        { return "bash" }
-func (t *BashTool) Description() string { return "Execute shell commands. Use for running tools, tests, builds, and git operations." }
+func (t *BashTool) Name() string { return "bash" }
+func (t *BashTool) Description() string {
+	return "Execute shell commands. Use for running tools, tests, builds, and git operations."
+}
 func (t *BashTool) ShortDescription() string { return "Run shell commands" }
 
 func (t *BashTool) Schema() any {
@@ -72,7 +74,7 @@ func (t *BashTool) Execute(ctx ExecContext, input json.RawMessage) (string, erro
 		if ctx.ReadInput != nil {
 			answer, err := ctx.ReadInput(msg + " Continue? (y/N): ")
 			if err != nil || (strings.ToLower(answer) != "y" && strings.ToLower(answer) != "yes") {
-				return fmt.Sprintf("Command cancelled: workdir is outside project root"), nil
+				return "Command cancelled: workdir is outside project root", nil
 			}
 		} else {
 			return fmt.Sprintf("Error: %s — set workdir inside the project or add a confirmation method", msg), nil
@@ -88,7 +90,7 @@ func (t *BashTool) Execute(ctx ExecContext, input json.RawMessage) (string, erro
 
 	timer := time.AfterFunc(time.Duration(timeout)*time.Second, func() {
 		if cmd.Process != nil {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 		}
 	})
 	defer timer.Stop()

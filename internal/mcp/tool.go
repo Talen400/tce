@@ -9,8 +9,8 @@ import (
 
 // ToolAdapter wraps an MCP tool definition as a tools.Tool.
 type ToolAdapter struct {
-	Def     ToolDef
-	Client  *Client
+	Def      ToolDef
+	Client   *Client
 	ToolDesc string
 }
 

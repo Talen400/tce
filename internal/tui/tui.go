@@ -42,10 +42,10 @@ type (
 type Model struct {
 	program *tea.Program
 
-	state   sessionState
-	width   int
-	height  int
-	ready   bool
+	state  sessionState
+	width  int
+	height int
+	ready  bool
 
 	profile  *project.Profile
 	agentCfg agent.Config
@@ -86,8 +86,6 @@ var (
 
 	styleSeparator = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240"))
-
-	styleContent = lipgloss.NewStyle()
 
 	styleDiffAdd = lipgloss.NewStyle().Foreground(lipgloss.Color("83"))
 	styleDiffDel = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))

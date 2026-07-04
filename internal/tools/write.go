@@ -10,8 +10,10 @@ import (
 
 type WriteTool struct{}
 
-func (t *WriteTool) Name() string        { return "write" }
-func (t *WriteTool) Description() string { return "Create a new file or overwrite an existing file with new content." }
+func (t *WriteTool) Name() string { return "write" }
+func (t *WriteTool) Description() string {
+	return "Create a new file or overwrite an existing file with new content."
+}
 func (t *WriteTool) ShortDescription() string { return "Create/overwrite files" }
 
 func (t *WriteTool) Schema() any {
@@ -82,8 +84,10 @@ func (t *WriteTool) Execute(ctx ExecContext, input json.RawMessage) (string, err
 
 type EditTool struct{}
 
-func (t *EditTool) Name() string        { return "edit" }
-func (t *EditTool) Description() string { return "Make precise edits to a file using exact find/replace. The old_string must match exactly once in the file." }
+func (t *EditTool) Name() string { return "edit" }
+func (t *EditTool) Description() string {
+	return "Make precise edits to a file using exact find/replace. The old_string must match exactly once in the file."
+}
 func (t *EditTool) ShortDescription() string { return "Edit files (find/replace)" }
 
 func (t *EditTool) Schema() any {
@@ -162,7 +166,7 @@ func (t *EditTool) Execute(ctx ExecContext, input json.RawMessage) (string, erro
 	if ctx.ReadInput != nil {
 		answer, err := ctx.ReadInput(prompt)
 		if err != nil || strings.ToLower(answer) == "n" || strings.ToLower(answer) == "no" {
-			return fmt.Sprintf("Edit cancelled by user"), nil
+			return "Edit cancelled by user", nil
 		}
 	}
 

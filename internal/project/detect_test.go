@@ -61,7 +61,7 @@ func TestDetectEmpty(t *testing.T) {
 }
 
 func TestDetectNonExistent(t *testing.T) {
-	p := Detect("/tmp/tce-nonexistent-"+t.Name())
+	p := Detect("/tmp/tce-nonexistent-" + t.Name())
 	if p.Language != "Unknown" {
 		t.Errorf("expected Unknown for non-existent dir, got %s", p.Language)
 	}
@@ -138,8 +138,8 @@ func TestDetectCFtPrefix(t *testing.T) {
 	if p.Language != "C" {
 		t.Errorf("expected C, got %s", p.Language)
 	}
-	if p.Framework != "42" {
-		t.Errorf("expected framework 42, got %s", p.Framework)
+	if p.Framework != "" {
+		t.Errorf("expected no framework, got %s", p.Framework)
 	}
 }
 

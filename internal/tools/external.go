@@ -13,10 +13,10 @@ import (
 // Parameters are defined via {{param}} placeholders in the Command string;
 // Schema() auto-generates a JSON schema from these placeholders.
 type ExternalTool struct {
-	NameVal        string
-	DescVal        string
-	ShortDescVal   string
-	Command        string
+	NameVal      string
+	DescVal      string
+	ShortDescVal string
+	Command      string
 }
 
 func (t *ExternalTool) Name() string             { return t.NameVal }

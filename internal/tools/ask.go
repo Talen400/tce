@@ -7,8 +7,10 @@ import (
 
 type AskTool struct{}
 
-func (t *AskTool) Name() string        { return "ask" }
-func (t *AskTool) Description() string { return "Ask the user a question when you need clarification, confirmation, or additional information." }
+func (t *AskTool) Name() string { return "ask" }
+func (t *AskTool) Description() string {
+	return "Ask the user a question when you need clarification, confirmation, or additional information."
+}
 func (t *AskTool) ShortDescription() string { return "Ask user a question" }
 
 func (t *AskTool) Schema() any {

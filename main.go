@@ -2,9 +2,9 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -368,10 +368,10 @@ func gitStatus(root string) string {
 	statusStr := strings.TrimSpace(string(status))
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("── git ──\n"))
+	b.WriteString("── git ──\n")
 	b.WriteString(fmt.Sprintf("  🌿 Branch: %s\n", branchStr))
 	if statusStr == "" {
-		b.WriteString(fmt.Sprintf("  ✓ Clean working tree\n"))
+		b.WriteString("  ✓ Clean working tree\n")
 	} else {
 		for _, line := range strings.Split(statusStr, "\n") {
 			b.WriteString(fmt.Sprintf("    %s\n", line))
@@ -386,9 +386,7 @@ func gitJSON(root string) string {
 	statusStr := strings.TrimSpace(string(status))
 	var files []string
 	if statusStr != "" {
-		for _, line := range strings.Split(statusStr, "\n") {
-			files = append(files, line)
-		}
+		files = append(files, strings.Split(statusStr, "\n")...)
 	}
 	out := map[string]any{
 		"branch": strings.TrimSpace(string(branch)),

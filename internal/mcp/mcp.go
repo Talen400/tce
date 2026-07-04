@@ -23,12 +23,12 @@ func nextRPCID() int64 {
 }
 
 type rpcMessage struct {
-	JSONRPC string      `json:"jsonrpc"`
-	ID      *int64      `json:"id,omitempty"`
-	Method  string      `json:"method,omitempty"`
-	Params  any         `json:"params,omitempty"`
-	Result  any         `json:"result,omitempty"`
-	Error   *rpcError   `json:"error,omitempty"`
+	JSONRPC string    `json:"jsonrpc"`
+	ID      *int64    `json:"id,omitempty"`
+	Method  string    `json:"method,omitempty"`
+	Params  any       `json:"params,omitempty"`
+	Result  any       `json:"result,omitempty"`
+	Error   *rpcError `json:"error,omitempty"`
 }
 
 type rpcError struct {
@@ -41,7 +41,6 @@ type Client struct {
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser
 	stdout io.ReadCloser
-	ready  bool
 	mu     sync.Mutex
 
 	initialized bool
@@ -107,7 +106,7 @@ func (c *Client) initialize() error {
 	c.initialized = true
 
 	// Send initialized notification (no response expected)
-	c.sendNotification("notifications/initialized", map[string]any{})
+	_ = c.sendNotification("notifications/initialized", map[string]any{})
 	return nil
 }
 
@@ -243,7 +242,7 @@ func (c *Client) readResponse(expectedID int64) (any, error) {
 				break
 			}
 			if bytes.HasPrefix([]byte(line), []byte("Content-Length: ")) {
-				fmt.Sscanf(line, "Content-Length: %d", &contentLength)
+				_, _ = fmt.Sscanf(line, "Content-Length: %d", &contentLength)
 			}
 		}
 

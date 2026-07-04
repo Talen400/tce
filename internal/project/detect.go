@@ -22,14 +22,14 @@ type Profile struct {
 }
 
 type rule struct {
-	files    []string
-	lang     string
-	fw       string
-	build    string
-	test     string
-	lint     string
-	fmt      string
-	pkgFunc  func(root string) string
+	files   []string
+	lang    string
+	fw      string
+	build   string
+	test    string
+	lint    string
+	fmt     string
+	pkgFunc func(root string) string
 }
 
 var rules = []rule{
@@ -72,7 +72,7 @@ var rules = []rule{
 			data, _ := os.ReadFile(filepath.Join(root, "Cargo.toml"))
 			for _, line := range strings.Split(string(data), "\n") {
 				if strings.HasPrefix(line, "name = ") {
-					name := strings.Trim(line, "name = \"")
+					name := strings.TrimPrefix(line, "name = \"")
 					return strings.TrimRight(name, "\"")
 				}
 			}
@@ -80,39 +80,39 @@ var rules = []rule{
 		},
 	},
 	{
-		files: []string{"pyproject.toml"},
-		lang:  "Python",
-		build: "pip install -e .",
-		test:  "pytest",
-		lint:  "ruff",
-		fmt:   "ruff format",
+		files:   []string{"pyproject.toml"},
+		lang:    "Python",
+		build:   "pip install -e .",
+		test:    "pytest",
+		lint:    "ruff",
+		fmt:     "ruff format",
 		pkgFunc: func(root string) string { return filepath.Base(root) },
 	},
 	{
-		files: []string{"Gemfile"},
-		lang:  "Ruby",
-		build: "bundle install",
-		test:  "rspec",
-		lint:  "rubocop",
-		fmt:   "rubocop -A",
+		files:   []string{"Gemfile"},
+		lang:    "Ruby",
+		build:   "bundle install",
+		test:    "rspec",
+		lint:    "rubocop",
+		fmt:     "rubocop -A",
 		pkgFunc: func(root string) string { return filepath.Base(root) },
 	},
 	{
-		files: []string{"composer.json"},
-		lang:  "PHP",
-		build: "composer install",
-		test:  "phpunit",
-		lint:  "phpcs",
-		fmt:   "phpcbf",
+		files:   []string{"composer.json"},
+		lang:    "PHP",
+		build:   "composer install",
+		test:    "phpunit",
+		lint:    "phpcs",
+		fmt:     "phpcbf",
 		pkgFunc: func(root string) string { return filepath.Base(root) },
 	},
 	{
-		files: []string{"build.gradle", "build.gradle.kts"},
-		lang:  "Kotlin/Java",
-		build: "gradle build",
-		test:  "gradle test",
-		lint:  "ktlint",
-		fmt:   "ktlint -F",
+		files:   []string{"build.gradle", "build.gradle.kts"},
+		lang:    "Kotlin/Java",
+		build:   "gradle build",
+		test:    "gradle test",
+		lint:    "ktlint",
+		fmt:     "ktlint -F",
 		pkgFunc: func(root string) string { return filepath.Base(root) },
 	},
 	{
@@ -125,10 +125,10 @@ var rules = []rule{
 		},
 	},
 	{
-		files: []string{"CMakeLists.txt"},
-		lang:  "C/C++",
-		build: "cmake --build build",
-		test:  "ctest",
+		files:   []string{"CMakeLists.txt"},
+		lang:    "C/C++",
+		build:   "cmake --build build",
+		test:    "ctest",
 		pkgFunc: func(root string) string { return filepath.Base(root) },
 	},
 }
@@ -187,9 +187,6 @@ func Detect(root string) *Profile {
 				}
 				if fileSet["django"] || fileSet["manage.py"] {
 					p.Framework = "Django"
-				}
-				if p.Language == "C" && hasFtPrefix(entries) {
-					p.Framework = "42"
 				}
 				break
 			}
@@ -275,13 +272,4 @@ func (p *Profile) Summary() string {
 		parts = append(parts, p.Framework)
 	}
 	return strings.Join(parts, " + ")
-}
-
-func hasFtPrefix(entries []os.DirEntry) bool {
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasPrefix(e.Name(), "ft_") {
-			return true
-		}
-	}
-	return false
 }
